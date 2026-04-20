@@ -4,8 +4,8 @@ import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import AdultTest from '@/components/tests/AdultTest'
 import KgTest from '@/components/tests/KGTest'
-import PathomTest from '@/components/tests/PathomTest'
-import MattayomTest from '@/components/tests/MatthayomTest'
+import PrathomTest from '@/components/tests/PrathomTest'
+import MathayomTest from '@/components/tests/MathayomTest'
 import { Button } from '@/components/ui/button'
 
 function TestEngine() {
@@ -25,13 +25,13 @@ function TestEngine() {
       return <KgTest name={name} />
     }
     if (age >= 6 && age <= 11) {
-      return <PathomTest name={name} />
+      return <PrathomTest name={name} />
     }
     if (age >= 12 && age <= 18) {
-      return <MattayomTest name={name} />
+      return <MathayomTest name={name} />
     }
 
-    // Fallback for ages outside 3-18
+    // Fallback for ages over 18
     return (
       <div className='text-center p-10'>
         Students aged over 18 should take the Adult Placement Test.

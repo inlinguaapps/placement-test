@@ -48,7 +48,7 @@ export default function YoungLearnerForm() {
         </div>
 
         <Button
-          className='w-full'
+          className='w-full h-11'
           onClick={handleStart}
           disabled={!name || !age}
         >
