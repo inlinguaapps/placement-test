@@ -187,11 +187,11 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
 
       <div className='flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-1'>
         <div className='flex items-center gap-4'>
-          <p className='text-sm text-muted-foreground font-medium'>
+          {/* <p className='text-sm text-muted-foreground font-medium'>
             Showing {processedData.length > 0 ? startIndex + 1 : 0} to{' '}
             {Math.min(startIndex + itemsPerPage, processedData.length)} of{' '}
             {processedData.length}
-          </p>
+          </p> */}
           <div className='flex items-center gap-2'>
             <span className='text-sm text-muted-foreground whitespace-nowrap'>
               Rows per page

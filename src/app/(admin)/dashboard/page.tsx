@@ -1,4 +1,5 @@
 import { ResultsTable } from '@/components/admin/ResultsTable'
+import { LogoutButton } from '@/components/logout-button'
 import { Button } from '@/components/ui/button'
 import { LogOut, FileSpreadsheet, GraduationCap } from 'lucide-react'
 
@@ -19,7 +20,8 @@ export default function DashboardPage() {
           </div>
 
           <div className='flex items-center gap-4'>
-            <Button
+            <LogoutButton />
+            {/* <Button
               variant='ghost'
               size='sm'
               className='hidden sm:flex gap-2 text-muted-foreground'
@@ -34,7 +36,7 @@ export default function DashboardPage() {
             >
               <LogOut size={18} />
               <span className='hidden sm:inline'>Logout</span>
-            </Button>
+            </Button> */}
           </div>
         </div>
       </nav>
