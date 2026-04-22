@@ -26,7 +26,7 @@ const initialData = [
     name: 'Somchai Dee',
     type: 'Adult',
     age: null,
-    branch: 'Siam Square',
+    branch: 'Fashion Island',
     level: 'B1',
     date: '2026-04-20',
   },

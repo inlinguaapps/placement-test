@@ -1,60 +1,52 @@
-'use client'
-
-import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
-import AdultTest from '@/components/tests/AdultTest'
-import KgTest from '@/components/tests/KGTest'
-import PrathomTest from '@/components/tests/PrathomTest'
-import MathayomTest from '@/components/tests/MathayomTest'
+// src/app/(student)/test/page.tsx
+import { initializeTestSession } from '@/app/actions'
+import AdaptiveTestController from '@/components/test/AdaptiveTestController'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 
-function TestEngine() {
-  const searchParams = useSearchParams()
-  const type = searchParams.get('type')
-  const name = searchParams.get('name') || 'Guest'
-  const age = Number(searchParams.get('age')) // Converts string "3" to number 3
+export default async function TestPage({
+  searchParams,
+}: {
+  searchParams: any
+}) {
+  // 1. Wait for params
+  const { name, type, age, branch } = await searchParams
 
-  // 1. HANDLE ADULT PATH
-  if (type === 'adult') {
-    return <AdultTest name={name} />
+  let session = null
+  let errorMessage = null
+
+  // 2. ONLY the data fetching goes in the try/catch
+  try {
+    session = await initializeTestSession({
+      name: name || 'Guest',
+      age: Number(age) || 0,
+      category: type === 'young' ? 'Young Learner' : 'Adult',
+      branch: branch || '',
+    })
+  } catch (error) {
+    console.error('Test initialization failed:', error)
+    errorMessage =
+      "We couldn't start your test. Please check your connection and try again."
   }
 
-  // 2. HANDLE YOUNG LEARNER PATH
-  if (type === 'young') {
-    if (age >= 0 && age <= 5) {
-      return <KgTest name={name} />
-    }
-    if (age >= 6 && age <= 11) {
-      return <PrathomTest name={name} />
-    }
-    if (age >= 12 && age <= 18) {
-      return <MathayomTest name={name} />
-    }
-
-    // Fallback for ages over 18
+  // 3. Handle the error UI outside the try/catch
+  if (errorMessage || !session) {
     return (
-      <div className='text-center p-10'>
-        Students aged over 18 should take the Adult Placement Test.
+      <div className='flex flex-col items-center justify-center min-h-screen p-6 text-center'>
+        <h1 className='text-xl font-bold mb-2'>System Error</h1>
+        <p className='text-muted-foreground mb-6'>{errorMessage}</p>
+        <Link href='/'>
+          <Button variant='outline'>Return to Home</Button>
+        </Link>
       </div>
     )
   }
 
-  // 3. EMERGENCY FALLBACK (If URL is messed up)
+  // 4. Return the Success UI
   return (
-    <div className='text-center p-10'>
-      <p>Invalid test type selected.</p>
-      <Button onClick={() => (window.location.href = '/')}>Go Back</Button>
-    </div>
-  )
-}
-
-export default function TestPage() {
-  return (
-    <div className='flex flex-col items-center justify-center min-h-screen p-6 bg-zinc-50 dark:bg-black'>
-      <div className='w-full max-w-3xl bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-sm border'>
-        <Suspense fallback={<div>Loading Test...</div>}>
-          <TestEngine />
-        </Suspense>
+    <div className='flex flex-col items-center justify-center min-h-screen p-4 bg-zinc-50 dark:bg-black'>
+      <div className='w-full max-w-2xl'>
+        <AdaptiveTestController initialSession={session} />
       </div>
     </div>
   )

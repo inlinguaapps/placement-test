@@ -1,3 +1,5 @@
+// src\app\(student)\page.tsx
+
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { GraduationCap, Lock } from 'lucide-react'
@@ -11,9 +13,11 @@ export default function SelectionPage() {
           <GraduationCap size={32} />
         </div>
 
-        <h1 className='text-3xl font-bold mb-2 text-center'>inlingua</h1>
+        <h1 className='text-3xl font-bold mb-2 text-center'>
+          inlingua Placement Test
+        </h1>
         <p className='text-muted-foreground mb-8 text-center'>
-          Please select your placement test track
+          Please select your test track
         </p>
 
         <div className='flex flex-col sm:flex-row gap-4 w-full max-w-[450px]'>
