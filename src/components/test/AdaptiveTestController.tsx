@@ -1,9 +1,29 @@
+// src\components\test\AdaptiveTestController.tsx
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
+import { TEST_STRATEGIES } from '@/logic/adaptive/strategies'
+import { StrategyName } from '@/types/test'
+
+/**
+ * Interface representing the question structure from Supabase
+ */
+interface Question {
+  id: string
+  test_type: string
+  level: string
+  question_text: string
+  options: Record<string, string>
+  correct_answer: string
+  image_url?: string
+  audio_url?: string
+  video_url?: string
+  transcript?: string
+}
 
 interface InitialSession {
   sessionId: string
@@ -13,56 +33,130 @@ interface InitialSession {
 
 interface Props {
   initialSession: InitialSession
+  strategyName?: StrategyName
 }
 
-export default function AdaptiveTestController({ initialSession }: Props) {
+export default function AdaptiveTestController({
+  initialSession,
+  strategyName = 'HYBRID_STANDARD',
+}: Props) {
   const supabase = createClient()
 
+  // Ref to prevent double-initialization in React Strict Mode
+  const hasInitialized = useRef(false)
+
+  const strategy = useMemo(
+    () => TEST_STRATEGIES[strategyName] || TEST_STRATEGIES['HYBRID_STANDARD'],
+    [strategyName],
+  )
+
+  // Initialize loading to true
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [currentQuestion, setCurrentQuestion] = useState<any>(null)
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([])
+  const [currentLevelHistory, setCurrentLevelHistory] = useState<boolean[]>([])
+
   const [stats, setStats] = useState({
     currentLevel: initialSession.startingLevel,
-    correctStreak: 0,
     totalAnswered: 0,
     isFinished: false,
   })
 
+  /**
+   * Fetches a question for subsequent adaptive jumps
+   */
+  const fetchQuestion = useCallback(
+    async (testType: string, level: string, excludeIds: string[]) => {
+      setLoading(true)
+      setError(null)
+
+      let query = supabase
+        .from('test_questions')
+        .select('*')
+        .eq('test_type', testType)
+        .eq('level', level)
+
+      if (excludeIds.length > 0) {
+        query = query.not('id', 'in', `(${excludeIds.join(',')})`)
+      }
+
+      const { data, error: fetchError } = await query.limit(1).maybeSingle()
+
+      if (fetchError) {
+        console.error('Fetch error:', fetchError)
+        setError('Technical error loading question.')
+      } else if (!data) {
+        setError(
+          `No more unique questions found for ${testType} at level ${level}.`,
+        )
+      } else {
+        setCurrentQuestion(data as Question)
+      }
+      setLoading(false)
+    },
+    [supabase],
+  )
+
+  /**
+   * INITIAL LOAD EFFECT
+   * Handles the very first question separately to avoid state sync conflicts
+   */
   useEffect(() => {
-    fetchQuestion(initialSession.testType, initialSession.startingLevel)
-  }, [initialSession])
+    if (hasInitialized.current) return
+    hasInitialized.current = true
 
-  async function fetchQuestion(testType: string, level: string) {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('test_questions')
-      .select('*')
-      .eq('test_type', testType)
-      .eq('level', level)
-      .limit(1)
-      .maybeSingle()
+    async function loadInitialQuestion() {
+      const { data, error: fetchError } = await supabase
+        .from('test_questions')
+        .select('*')
+        .eq('test_type', initialSession.testType)
+        .eq('level', initialSession.startingLevel)
+        .limit(1)
+        .maybeSingle()
 
-    if (error) console.error('Fetch error:', error)
-    setCurrentQuestion(data)
-    setLoading(false)
-  }
-
-  const handleAnswer = async (isCorrect: boolean) => {
-    let nextLevel = stats.currentLevel
-    let nextStreak = isCorrect ? stats.correctStreak + 1 : 0
-    let total = stats.totalAnswered + 1
-
-    if (nextStreak >= 3) {
-      nextLevel = getNextLevel(stats.currentLevel)
-      nextStreak = 0
+      if (fetchError) {
+        setError('Technical error loading initial question.')
+      } else if (!data) {
+        setError('No questions found for this test type.')
+      } else {
+        setCurrentQuestion(data as Question)
+      }
+      setLoading(false)
     }
 
-    // Logic for finishing the test (20 questions)
-    if (total >= 20) {
-      setIsSaving(true)
-      // Call with 'true' to set status to 'completed'
-      await updateTestResult(initialSession.sessionId, nextLevel, true)
+    loadInitialQuestion()
+  }, [initialSession, supabase])
 
+  const handleAnswer = async (isCorrect: boolean) => {
+    if (!currentQuestion) return
+
+    const newHistory = [...currentLevelHistory, isCorrect]
+    const updatedUsedIds = [...usedQuestionIds, currentQuestion.id]
+    const total = stats.totalAnswered + 1
+
+    setUsedQuestionIds(updatedUsedIds)
+
+    let nextLevel = stats.currentLevel
+    let levelChanged = false
+
+    if (strategy.shouldMoveUp(newHistory)) {
+      nextLevel = getLevelChange(stats.currentLevel, 'up')
+      levelChanged = nextLevel !== stats.currentLevel
+    } else if (strategy.shouldMoveDown(newHistory)) {
+      nextLevel = getLevelChange(stats.currentLevel, 'down')
+      levelChanged = nextLevel !== stats.currentLevel
+    }
+
+    const isAtMax = total >= strategy.maxQuestions
+    const isAtMin = total >= strategy.minQuestions
+    const isStable = !levelChanged && newHistory.length >= 3
+
+    if (isAtMax || (isAtMin && isStable)) {
+      setIsSaving(true)
+      await updateTestResult(initialSession.sessionId, nextLevel, true)
       setStats((prev) => ({
         ...prev,
         isFinished: true,
@@ -76,16 +170,17 @@ export default function AdaptiveTestController({ initialSession }: Props) {
     setStats((prev) => ({
       ...prev,
       currentLevel: nextLevel,
-      correctStreak: nextStreak,
       totalAnswered: total,
     }))
 
-    // Heartbeat update every 5 questions (status: in_progress)
+    setCurrentLevelHistory(levelChanged ? [] : newHistory)
+
+    // Autosave progress every 5 questions
     if (total % 5 === 0) {
       updateTestResult(initialSession.sessionId, nextLevel, false)
     }
 
-    fetchQuestion(initialSession.testType, nextLevel)
+    fetchQuestion(initialSession.testType, nextLevel, updatedUsedIds)
   }
 
   if (stats.isFinished) {
@@ -100,9 +195,9 @@ export default function AdaptiveTestController({ initialSession }: Props) {
             {stats.currentLevel}
           </span>
         </div>
-        <p className='text-zinc-500 max-w-xs mx-auto'>
-          Your results have been sent to the branch. You can close this window
-          or return home.
+        <p className='text-zinc-500 max-w-xs mx-auto text-balance'>
+          Your results have been recorded. You can close this window or return
+          home.
         </p>
         <Button
           size='lg'
@@ -115,9 +210,17 @@ export default function AdaptiveTestController({ initialSession }: Props) {
     )
   }
 
+  if (error) {
+    return (
+      <div className='text-center p-10 border-2 border-dashed rounded-xl'>
+        <p className='text-red-500 font-medium mb-4'>{error}</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    )
+  }
+
   return (
     <div className='space-y-8'>
-      {/* Test Track Header - Clean and prominent */}
       <div className='border-b pb-4'>
         <h1 className='text-xl font-bold uppercase tracking-tight text-zinc-400'>
           {initialSession.testType} Placement Test
@@ -134,9 +237,33 @@ export default function AdaptiveTestController({ initialSession }: Props) {
       ) : (
         <>
           <div className='space-y-6'>
-            <div className='text-sm font-medium text-zinc-400'>
-              Question {stats.totalAnswered + 1}
+            <div className='flex justify-between items-center'>
+              <div className='text-sm font-medium text-zinc-400'>
+                Question {stats.totalAnswered + 1}
+              </div>
+              <div className='px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded border border-amber-200 uppercase tracking-tighter'>
+                Dev Mode: Level {currentQuestion.level}
+              </div>
             </div>
+
+            {currentQuestion.image_url && (
+              <div className='rounded-xl overflow-hidden border'>
+                <img
+                  src={currentQuestion.image_url}
+                  alt='Context'
+                  className='w-full h-auto object-cover max-h-64'
+                />
+              </div>
+            )}
+
+            {currentQuestion.audio_url && (
+              <div className='bg-zinc-50 p-4 rounded-lg border'>
+                <audio controls className='w-full'>
+                  <source src={currentQuestion.audio_url} type='audio/mpeg' />
+                </audio>
+              </div>
+            )}
+
             <h2 className='text-2xl font-semibold leading-snug'>
               {currentQuestion.question_text}
             </h2>
@@ -144,8 +271,8 @@ export default function AdaptiveTestController({ initialSession }: Props) {
 
           <div className='grid gap-4'>
             {['a', 'b', 'c', 'd'].map((letter) => {
-              const option = currentQuestion[`option_${letter}`]
-              if (!option) return null
+              const optionText = currentQuestion.options?.[letter]
+              if (!optionText) return null
               return (
                 <Button
                   key={letter}
@@ -155,10 +282,10 @@ export default function AdaptiveTestController({ initialSession }: Props) {
                     handleAnswer(letter === currentQuestion.correct_answer)
                   }
                 >
-                  <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white group-hover:border-zinc-900 text-sm font-bold uppercase transition-colors'>
+                  <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
                     {letter}
                   </span>
-                  <span className='flex-1'>{option}</span>
+                  <span className='flex-1'>{optionText}</span>
                 </Button>
               )
             })}
@@ -169,8 +296,11 @@ export default function AdaptiveTestController({ initialSession }: Props) {
   )
 }
 
-function getNextLevel(current: string): string {
+function getLevelChange(current: string, direction: 'up' | 'down'): string {
   const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
-  const idx = levels.indexOf(current)
-  return idx < levels.length - 1 ? levels[idx + 1] : current
+  const idx = levels.findIndex((l) => l.toLowerCase() === current.toLowerCase())
+  if (idx === -1) return current
+  if (direction === 'up')
+    return idx < levels.length - 1 ? levels[idx + 1] : levels[idx]
+  return idx > 0 ? levels[idx - 1] : levels[idx]
 }

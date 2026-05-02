@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Table,
   TableBody,
@@ -18,48 +18,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react'
+import {
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  Loader2,
+} from 'lucide-react'
+import { createClient } from '@/lib/client'
 
-const initialData = [
-  {
-    id: 1,
-    name: 'Somchai Dee',
-    type: 'Adult',
-    age: null,
-    branch: 'Fashion Island',
-    level: 'B1',
-    date: '2026-04-20',
-  },
-  {
-    id: 2,
-    name: 'Jane Doe',
-    type: 'Prathom',
-    age: 8,
-    branch: 'Bang Na',
-    level: 'A1',
-    date: '2026-04-19',
-  },
-  {
-    id: 3,
-    name: 'Kittisak P.',
-    type: 'KG',
-    age: 5,
-    branch: 'Paragon',
-    level: 'A2',
-    date: '2026-04-19',
-  },
-  {
-    id: 4,
-    name: 'Ananda S.',
-    type: 'Mathayom',
-    age: 14,
-    branch: 'Pinklao',
-    level: 'B2',
-    date: '2026-04-18',
-  },
-]
+// 1. Define strict interface to remove 'any' warnings
+interface TestResult {
+  id: string
+  student_name: string
+  test_type: 'Adult' | 'Mathayom' | 'Prathom' | 'KG'
+  age: number | null
+  branch_name: string
+  final_result: string
+  created_at: string
+  status?: string | null
+  started_at_level?: string | null
+}
 
-type SortField = 'name' | 'type' | 'age' | 'branch' | 'level' | 'date'
+type SortField =
+  | 'student_name'
+  | 'test_type'
+  | 'age'
+  | 'branch_name'
+  | 'final_result'
+  | 'created_at'
 type SortOrder = 'asc' | 'desc'
 
 interface ResultsTableProps {
@@ -67,11 +54,42 @@ interface ResultsTableProps {
 }
 
 export function ResultsTable({ branchFilter }: ResultsTableProps) {
+  const supabase = createClient()
+  // 2. Apply the interface to the state
+  const [data, setData] = useState<TestResult[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [sortField, setSortField] = useState<SortField>('date')
+  const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [itemsPerPage, setItemsPerPage] = useState(10)
+
+  useEffect(() => {
+    async function fetchResults() {
+      setLoading(true)
+
+      // 1. Start the query builder
+      let query = supabase.from('test_results').select('*')
+
+      // 2. Apply filters BEFORE casting the return type
+      if (branchFilter) {
+        query = query.eq('branch_name', branchFilter)
+      }
+
+      // 3. Apply sorting or other modifiers
+      query = query.order('created_at', { ascending: false })
+
+      // 4. Finally, cast the return type and execute
+      const { data: results, error } = await query.returns<TestResult[]>()
+
+      if (!error && results) {
+        setData(results)
+      }
+      setLoading(false)
+    }
+
+    fetchResults()
+  }, [branchFilter, supabase])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -83,28 +101,30 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
   }
 
   const processedData = useMemo(() => {
-    const filtered = initialData.filter((item) => {
-      const matchesBranch = branchFilter ? item.branch === branchFilter : true
+    const filtered = data.filter((item) => {
       const s = searchTerm.toLowerCase()
       return (
-        matchesBranch &&
-        (item.name.toLowerCase().includes(s) ||
-          item.type.toLowerCase().includes(s) ||
-          item.branch.toLowerCase().includes(s) ||
-          item.level.toLowerCase().includes(s))
+        item.student_name.toLowerCase().includes(s) ||
+        item.test_type.toLowerCase().includes(s) ||
+        item.branch_name.toLowerCase().includes(s) ||
+        item.final_result.toLowerCase().includes(s)
       )
     })
 
     return filtered.sort((a, b) => {
       const valA = a[sortField]
       const valB = b[sortField]
-      if (valA === null) return sortOrder === 'asc' ? -1 : 1
-      if (valB === null) return sortOrder === 'asc' ? 1 : -1
+
+      if (valA === null || valA === undefined)
+        return sortOrder === 'asc' ? -1 : 1
+      if (valB === null || valB === undefined)
+        return sortOrder === 'asc' ? 1 : -1
+
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1
       return 0
     })
-  }, [searchTerm, branchFilter, sortField, sortOrder])
+  }, [data, searchTerm, sortField, sortOrder])
 
   const totalPages = Math.ceil(processedData.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -112,6 +132,14 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
     startIndex,
     startIndex + itemsPerPage,
   )
+
+  if (loading) {
+    return (
+      <div className='h-64 flex items-center justify-center'>
+        <Loader2 className='animate-spin text-blue-600' size={32} />
+      </div>
+    )
+  }
 
   return (
     <div className='space-y-4'>
@@ -132,22 +160,27 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
         <Table>
           <TableHeader className='bg-zinc-50 dark:bg-zinc-800/50'>
             <TableRow>
-              {['name', 'type', 'age', 'branch', 'level', 'date'].map(
-                (field) => (
-                  <TableHead
-                    key={field}
-                    onClick={() => handleSort(field as SortField)}
-                    className={`cursor-pointer hover:text-zinc-900 transition-colors ${field === 'date' ? 'text-right' : ''}`}
+              {[
+                { label: 'Name', key: 'student_name' },
+                { label: 'Type', key: 'test_type' },
+                { label: 'Age', key: 'age' },
+                { label: 'Branch', key: 'branch_name' },
+                { label: 'Level', key: 'final_result' },
+                { label: 'Date', key: 'created_at' },
+              ].map((column) => (
+                <TableHead
+                  key={column.key}
+                  onClick={() => handleSort(column.key as SortField)}
+                  className={`cursor-pointer hover:text-zinc-900 transition-colors ${column.key === 'created_at' ? 'text-right' : ''}`}
+                >
+                  <div
+                    className={`flex items-center gap-1 ${column.key === 'created_at' ? 'justify-end' : ''}`}
                   >
-                    <div
-                      className={`flex items-center gap-1 ${field === 'date' ? 'justify-end' : ''}`}
-                    >
-                      {field.charAt(0).toUpperCase() + field.slice(1)}
-                      <ArrowUpDown size={14} className='opacity-50' />
-                    </div>
-                  </TableHead>
-                ),
-              )}
+                    {column.label}
+                    <ArrowUpDown size={14} className='opacity-50' />
+                  </div>
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -157,17 +190,19 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                   key={result.id}
                   className='hover:bg-zinc-50/50 text-sm'
                 >
-                  <TableCell className='font-medium'>{result.name}</TableCell>
-                  <TableCell>{result.type}</TableCell>
+                  <TableCell className='font-medium'>
+                    {result.student_name}
+                  </TableCell>
+                  <TableCell>{result.test_type}</TableCell>
                   <TableCell>
                     {result.age ? `${result.age} yrs` : '—'}
                   </TableCell>
-                  <TableCell>{result.branch}</TableCell>
+                  <TableCell>{result.branch_name}</TableCell>
                   <TableCell className='font-bold text-blue-600'>
-                    {result.level}
+                    {result.final_result}
                   </TableCell>
                   <TableCell className='text-right text-muted-foreground tabular-nums'>
-                    {result.date}
+                    {new Date(result.created_at).toLocaleDateString()}
                   </TableCell>
                 </TableRow>
               ))
@@ -186,35 +221,28 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
       </div>
 
       <div className='flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-1'>
-        <div className='flex items-center gap-4'>
-          {/* <p className='text-sm text-muted-foreground font-medium'>
-            Showing {processedData.length > 0 ? startIndex + 1 : 0} to{' '}
-            {Math.min(startIndex + itemsPerPage, processedData.length)} of{' '}
-            {processedData.length}
-          </p> */}
-          <div className='flex items-center gap-2'>
-            <span className='text-sm text-muted-foreground whitespace-nowrap'>
-              Rows per page
-            </span>
-            <Select
-              value={itemsPerPage.toString()}
-              onValueChange={(val: unknown) => {
-                setItemsPerPage(Number(val))
-                setCurrentPage(1)
-              }}
-            >
-              <SelectTrigger className='h-8 w-[70px]'>
-                <SelectValue placeholder={itemsPerPage} />
-              </SelectTrigger>
-              <SelectContent>
-                {[10, 20, 30, 40, 50].map((size) => (
-                  <SelectItem key={size} value={size.toString()}>
-                    {size}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className='flex items-center gap-2'>
+          <span className='text-sm text-muted-foreground whitespace-nowrap'>
+            Rows per page
+          </span>
+          <Select
+            value={itemsPerPage.toString()}
+            onValueChange={(val: string) => {
+              setItemsPerPage(Number(val))
+              setCurrentPage(1)
+            }}
+          >
+            <SelectTrigger className='h-8 w-[70px]'>
+              <SelectValue placeholder={itemsPerPage} />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 30, 40, 50].map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className='flex items-center gap-2'>
