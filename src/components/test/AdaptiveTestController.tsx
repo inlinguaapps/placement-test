@@ -187,13 +187,11 @@ export default function AdaptiveTestController({
     return (
       <div className='text-center space-y-4 py-10'>
         <h2 className='text-3xl font-bold'>Test Complete!</h2>
-        <div className='p-8 bg-zinc-100 dark:bg-zinc-800 rounded-2xl inline-block'>
-          <p className='text-sm uppercase tracking-widest text-zinc-500 mb-1'>
-            Estimated Level
+        <div className='p-8 bg-amber-100 text-amber-700 rounded-2xl inline-block'>
+          <p className='text-sm uppercase tracking-widest mb-1'>
+            Dev Mode: Estimated Level
           </p>
-          <span className='text-5xl font-black text-blue-600'>
-            {stats.currentLevel}
-          </span>
+          <span className='text-5xl font-black'>{stats.currentLevel}</span>
         </div>
         <p className='text-zinc-500 max-w-xs mx-auto text-balance'>
           Your results have been recorded. You can close this window or return
@@ -241,7 +239,7 @@ export default function AdaptiveTestController({
               <div className='text-sm font-medium text-zinc-400'>
                 Question {stats.totalAnswered + 1}
               </div>
-              <div className='px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded border border-amber-200 uppercase tracking-tighter'>
+              <div className='px-2 py-1 bg-amber-100 text-amber-700 text-[12px] font-bold rounded border border-amber-200 uppercase tracking-tighter'>
                 Dev Mode: Level {currentQuestion.level}
               </div>
             </div>

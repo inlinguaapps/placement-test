@@ -3,19 +3,24 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { GraduationCap, Lock } from 'lucide-react'
+import Image from 'next/image'
 
 export default function SelectionPage() {
   return (
-    <div className='flex flex-col min-h-screen'>
+    <div className='flex flex-col min-h-screen bg-blue-400'>
       {/* Main Content */}
       <div className='flex flex-col flex-1 items-center justify-center p-6'>
-        <div className='bg-blue-600 p-3 rounded-2xl text-white mb-6'>
-          <GraduationCap size={32} />
-        </div>
+        {/* <div className='bg-blue-600 p-3 rounded-2xl text-white mb-6'> */}
+        <Image
+          src='/inlingua.png'
+          alt='Logo'
+          width={500}
+          height={500}
+          loading='eager'
+        />
+        {/* </div> */}
 
-        <h1 className='text-3xl font-bold mb-2 text-center'>
-          inlingua Placement Test
-        </h1>
+        <h1 className='text-3xl font-bold mb-2 text-center'>Placement Test</h1>
         <p className='text-muted-foreground mb-8 text-center'>
           Please select your test track
         </p>
