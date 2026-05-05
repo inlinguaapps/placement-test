@@ -60,7 +60,7 @@ export default async function DashboardPage() {
       <main className='max-w-7xl mx-auto p-4 sm:p-8 space-y-6'>
         <header>
           <h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>
-            Placement Results
+            Placement Test Results
           </h1>
           <p className='text-muted-foreground mt-1'>
             Currently viewing:{' '}

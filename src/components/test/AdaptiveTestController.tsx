@@ -1,5 +1,4 @@
 // // src\components\test\AdaptiveTestController.tsx
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -20,6 +19,11 @@ interface Question {
   audio_url?: string
   video_url?: string
   transcript?: string
+}
+
+interface HistoryEntry {
+  level: string
+  correct: boolean
 }
 
 interface InitialSession {
@@ -52,6 +56,9 @@ export default function AdaptiveTestController({
   const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([])
   const [currentLevelHistory, setCurrentLevelHistory] = useState<boolean[]>([])
 
+  // New state to track the granular history of the entire test
+  const [fullHistory, setFullHistory] = useState<HistoryEntry[]>([])
+
   const [stats, setStats] = useState({
     currentLevel: initialSession.startingLevel,
     totalAnswered: 0,
@@ -59,9 +66,15 @@ export default function AdaptiveTestController({
   })
 
   const finalizeTest = useCallback(
-    async (finalLevel: string, total: number) => {
+    async (finalLevel: string, total: number, history: HistoryEntry[]) => {
       setIsSaving(true)
-      await updateTestResult(initialSession.sessionId, finalLevel, true)
+      // Pass the history array to your server action
+      await updateTestResult(
+        initialSession.sessionId,
+        finalLevel,
+        true,
+        history,
+      )
       setStats((prev) => ({
         ...prev,
         isFinished: true,
@@ -94,13 +107,13 @@ export default function AdaptiveTestController({
         console.error('Fetch error:', fetchError)
         setError('Technical error loading question.')
       } else if (!data) {
-        finalizeTest(level, stats.totalAnswered)
+        finalizeTest(level, stats.totalAnswered, fullHistory)
       } else {
         setCurrentQuestion(data as Question)
       }
       setLoading(false)
     },
-    [supabase, finalizeTest, stats.totalAnswered],
+    [supabase, finalizeTest, stats.totalAnswered, fullHistory],
   )
 
   useEffect(() => {
@@ -132,7 +145,15 @@ export default function AdaptiveTestController({
   const handleAnswer = async (isCorrect: boolean) => {
     if (!currentQuestion) return
 
-    const newHistory = [...currentLevelHistory, isCorrect]
+    // Track this specific interaction
+    const newEntry: HistoryEntry = {
+      level: currentQuestion.level,
+      correct: isCorrect,
+    }
+    const updatedFullHistory = [...fullHistory, newEntry]
+    setFullHistory(updatedFullHistory)
+
+    const newLevelHistory = [...currentLevelHistory, isCorrect]
     const updatedUsedIds = [...usedQuestionIds, currentQuestion.id]
     const total = stats.totalAnswered + 1
 
@@ -141,20 +162,20 @@ export default function AdaptiveTestController({
     let nextLevel = stats.currentLevel
     let levelChanged = false
 
-    if (strategy.shouldMoveUp(newHistory)) {
+    if (strategy.shouldMoveUp(newLevelHistory)) {
       nextLevel = getLevelChange(stats.currentLevel, 'up')
       levelChanged = nextLevel !== stats.currentLevel
-    } else if (strategy.shouldMoveDown(newHistory)) {
+    } else if (strategy.shouldMoveDown(newLevelHistory)) {
       nextLevel = getLevelChange(stats.currentLevel, 'down')
       levelChanged = nextLevel !== stats.currentLevel
     }
 
     const isAtMax = total >= strategy.maxQuestions
     const isAtMin = total >= strategy.minQuestions
-    const isStable = !levelChanged && newHistory.length >= 3
+    const isStable = !levelChanged && newLevelHistory.length >= 3
 
     if (isAtMax || (isAtMin && isStable)) {
-      await finalizeTest(nextLevel, total)
+      await finalizeTest(nextLevel, total, updatedFullHistory)
       return
     }
 
@@ -164,10 +185,16 @@ export default function AdaptiveTestController({
       totalAnswered: total,
     }))
 
-    setCurrentLevelHistory(levelChanged ? [] : newHistory)
+    setCurrentLevelHistory(levelChanged ? [] : newLevelHistory)
 
+    // Send partial results and full history log every 5 questions
     if (total % 5 === 0) {
-      updateTestResult(initialSession.sessionId, nextLevel, false)
+      updateTestResult(
+        initialSession.sessionId,
+        nextLevel,
+        false,
+        updatedFullHistory,
+      )
     }
 
     fetchQuestion(initialSession.testType, nextLevel, updatedUsedIds)
@@ -209,7 +236,6 @@ export default function AdaptiveTestController({
 
   return (
     <div className='space-y-8'>
-      {/* PERSISTENT HEADER: Question count and Level info stay here */}
       <div className='border-b pb-4'>
         <div className='flex justify-between items-end'>
           <div>
@@ -229,7 +255,6 @@ export default function AdaptiveTestController({
         </div>
       </div>
 
-      {/* DYNAMIC CONTENT AREA: Includes min-height to prevent vertical snapping */}
       <div className='min-h-[500px] flex flex-col'>
         {loading || isSaving || !currentQuestion ? (
           <div className='flex-1 flex flex-col items-center justify-center space-y-4'>

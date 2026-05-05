@@ -27,7 +27,6 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
 
-// 1. Define strict interface to remove 'any' warnings
 interface TestResult {
   id: string
   student_name: string
@@ -38,6 +37,7 @@ interface TestResult {
   created_at: string
   status?: string | null
   started_at_level?: string | null
+  question_history: { level: string; correct: boolean }[] | null
 }
 
 type SortField =
@@ -55,7 +55,6 @@ interface ResultsTableProps {
 
 export function ResultsTable({ branchFilter }: ResultsTableProps) {
   const supabase = createClient()
-  // 2. Apply the interface to the state
   const [data, setData] = useState<TestResult[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -67,19 +66,11 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
   useEffect(() => {
     async function fetchResults() {
       setLoading(true)
-
-      // 1. Start the query builder
       let query = supabase.from('test_results').select('*')
-
-      // 2. Apply filters BEFORE casting the return type
       if (branchFilter) {
         query = query.eq('branch_name', branchFilter)
       }
-
-      // 3. Apply sorting or other modifiers
       query = query.order('created_at', { ascending: false })
-
-      // 4. Finally, cast the return type and execute
       const { data: results, error } = await query.returns<TestResult[]>()
 
       if (!error && results) {
@@ -87,7 +78,6 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
       }
       setLoading(false)
     }
-
     fetchResults()
   }, [branchFilter, supabase])
 
@@ -114,12 +104,10 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
     return filtered.sort((a, b) => {
       const valA = a[sortField]
       const valB = b[sortField]
-
       if (valA === null || valA === undefined)
         return sortOrder === 'asc' ? -1 : 1
       if (valB === null || valB === undefined)
         return sortOrder === 'asc' ? 1 : -1
-
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1
       return 0
@@ -166,21 +154,32 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                 { label: 'Age', key: 'age' },
                 { label: 'Branch', key: 'branch_name' },
                 { label: 'Level', key: 'final_result' },
-                { label: 'Date', key: 'created_at' },
               ].map((column) => (
                 <TableHead
                   key={column.key}
                   onClick={() => handleSort(column.key as SortField)}
-                  className={`cursor-pointer hover:text-zinc-900 transition-colors ${column.key === 'created_at' ? 'text-right' : ''}`}
+                  className='cursor-pointer hover:text-zinc-900 transition-colors'
                 >
-                  <div
-                    className={`flex items-center gap-1 ${column.key === 'created_at' ? 'justify-end' : ''}`}
-                  >
+                  <div className='flex items-center gap-1'>
                     {column.label}
                     <ArrowUpDown size={14} className='opacity-50' />
                   </div>
                 </TableHead>
               ))}
+
+              {/* Added Progress Head for the dots */}
+              <TableHead>Answers (hover over dot for level)</TableHead>
+
+              {/* Date Header aligned to left */}
+              <TableHead
+                onClick={() => handleSort('created_at')}
+                className='cursor-pointer hover:text-zinc-900 transition-colors'
+              >
+                <div className='flex items-center gap-1'>
+                  Date
+                  <ArrowUpDown size={14} className='opacity-50' />
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -201,14 +200,29 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                   <TableCell className='font-bold text-blue-600'>
                     {result.final_result}
                   </TableCell>
-                  <TableCell className='text-right text-muted-foreground tabular-nums'>
+
+                  {/* DNA Strip / Progress Column */}
+                  <TableCell>
+                    <div className='flex gap-1'>
+                      {result.question_history?.map((q, i) => (
+                        <div
+                          key={i}
+                          title={`Level: ${q.level}`}
+                          className={`w-3 h-3 rounded-full ${q.correct ? 'bg-green-600' : 'bg-red-600'}`}
+                        />
+                      ))}
+                    </div>
+                  </TableCell>
+
+                  {/* Date Column aligned left */}
+                  <TableCell className='text-left text-muted-foreground tabular-nums'>
                     {new Date(result.created_at).toLocaleString('en-GB', {
                       day: '2-digit',
                       month: 'short',
                       year: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit',
-                      hour12: false, // Set to true if you prefer AM/PM
+                      hour12: false,
                     })}
                   </TableCell>
                 </TableRow>
@@ -216,7 +230,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className='h-24 text-center text-muted-foreground'
                 >
                   No results found.
