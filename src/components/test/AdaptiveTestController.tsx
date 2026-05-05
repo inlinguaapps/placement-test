@@ -1,4 +1,4 @@
-// src\components\test\AdaptiveTestController.tsx
+// // src\components\test\AdaptiveTestController.tsx
 
 'use client'
 
@@ -9,9 +9,6 @@ import { updateTestResult } from '@/app/actions'
 import { TEST_STRATEGIES } from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
 
-/**
- * Interface representing the question structure from Supabase
- */
 interface Question {
   id: string
   test_type: string
@@ -41,8 +38,6 @@ export default function AdaptiveTestController({
   strategyName = 'STRICT_ACADEMIC',
 }: Props) {
   const supabase = createClient()
-
-  // Ref to prevent double-initialization in React Strict Mode
   const hasInitialized = useRef(false)
 
   const strategy = useMemo(
@@ -50,12 +45,10 @@ export default function AdaptiveTestController({
     [strategyName],
   )
 
-  // Initialize loading to true
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null)
   const [error, setError] = useState<string | null>(null)
-
   const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([])
   const [currentLevelHistory, setCurrentLevelHistory] = useState<boolean[]>([])
 
@@ -65,9 +58,21 @@ export default function AdaptiveTestController({
     isFinished: false,
   })
 
-  /**
-   * Fetches a question for subsequent adaptive jumps
-   */
+  const finalizeTest = useCallback(
+    async (finalLevel: string, total: number) => {
+      setIsSaving(true)
+      await updateTestResult(initialSession.sessionId, finalLevel, true)
+      setStats((prev) => ({
+        ...prev,
+        isFinished: true,
+        totalAnswered: total,
+        currentLevel: finalLevel,
+      }))
+      setIsSaving(false)
+    },
+    [initialSession.sessionId],
+  )
+
   const fetchQuestion = useCallback(
     async (testType: string, level: string, excludeIds: string[]) => {
       setLoading(true)
@@ -89,21 +94,15 @@ export default function AdaptiveTestController({
         console.error('Fetch error:', fetchError)
         setError('Technical error loading question.')
       } else if (!data) {
-        setError(
-          `No more unique questions found for ${testType} at level ${level}.`,
-        )
+        finalizeTest(level, stats.totalAnswered)
       } else {
         setCurrentQuestion(data as Question)
       }
       setLoading(false)
     },
-    [supabase],
+    [supabase, finalizeTest, stats.totalAnswered],
   )
 
-  /**
-   * INITIAL LOAD EFFECT
-   * Handles the very first question separately to avoid state sync conflicts
-   */
   useEffect(() => {
     if (hasInitialized.current) return
     hasInitialized.current = true
@@ -155,15 +154,7 @@ export default function AdaptiveTestController({
     const isStable = !levelChanged && newHistory.length >= 3
 
     if (isAtMax || (isAtMin && isStable)) {
-      setIsSaving(true)
-      await updateTestResult(initialSession.sessionId, nextLevel, true)
-      setStats((prev) => ({
-        ...prev,
-        isFinished: true,
-        totalAnswered: total,
-        currentLevel: nextLevel,
-      }))
-      setIsSaving(false)
+      await finalizeTest(nextLevel, total)
       return
     }
 
@@ -175,7 +166,6 @@ export default function AdaptiveTestController({
 
     setCurrentLevelHistory(levelChanged ? [] : newHistory)
 
-    // Autosave progress every 5 questions
     if (total % 5 === 0) {
       updateTestResult(initialSession.sessionId, nextLevel, false)
     }
@@ -189,13 +179,13 @@ export default function AdaptiveTestController({
         <h2 className='text-3xl font-bold'>Test Complete!</h2>
         <div className='p-8 bg-amber-100 text-amber-700 rounded-2xl inline-block'>
           <p className='text-sm uppercase tracking-widest mb-1'>
-            Dev Mode: Estimated Level
+            Estimated Level
           </p>
           <span className='text-5xl font-black'>{stats.currentLevel}</span>
         </div>
         <p className='text-zinc-500 max-w-xs mx-auto text-balance'>
-          Your results have been recorded. You can close this window or return
-          home.
+          Your results have been recorded. Our team in Bangkok will review your
+          score shortly.
         </p>
         <Button
           size='lg'
@@ -219,34 +209,41 @@ export default function AdaptiveTestController({
 
   return (
     <div className='space-y-8'>
+      {/* PERSISTENT HEADER: Question count and Level info stay here */}
       <div className='border-b pb-4'>
-        <h1 className='text-xl font-bold uppercase tracking-tight text-zinc-400'>
-          {initialSession.testType} Placement Test
-        </h1>
+        <div className='flex justify-between items-end'>
+          <div>
+            <h1 className='text-xl font-bold uppercase tracking-tight text-zinc-400'>
+              {initialSession.testType} Placement Test
+            </h1>
+            <div className='text-sm font-medium text-zinc-400 mt-1'>
+              Question {stats.totalAnswered + 1}
+            </div>
+          </div>
+
+          {currentQuestion && !loading && (
+            <div className='px-2 py-1 bg-amber-100 text-amber-700 text-[12px] font-bold rounded border border-amber-200 uppercase tracking-tighter mb-1'>
+              Dev Mode: Level {currentQuestion.level}
+            </div>
+          )}
+        </div>
       </div>
 
-      {loading || isSaving || !currentQuestion ? (
-        <div className='text-center p-20 space-y-4'>
-          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
-          <p className='text-zinc-500 italic'>
-            {isSaving ? 'Finalizing...' : 'Preparing next question...'}
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className='space-y-6'>
-            <div className='flex justify-between items-center'>
-              <div className='text-sm font-medium text-zinc-400'>
-                Question {stats.totalAnswered + 1}
-              </div>
-              <div className='px-2 py-1 bg-amber-100 text-amber-700 text-[12px] font-bold rounded border border-amber-200 uppercase tracking-tighter'>
-                Dev Mode: Level {currentQuestion.level}
-              </div>
-            </div>
-
+      {/* DYNAMIC CONTENT AREA: Includes min-height to prevent vertical snapping */}
+      <div className='min-h-[500px] flex flex-col'>
+        {loading || isSaving || !currentQuestion ? (
+          <div className='flex-1 flex flex-col items-center justify-center space-y-4'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600'></div>
+            <p className='text-zinc-500 italic'>
+              {isSaving ? 'Finalizing...' : 'Preparing question...'}
+            </p>
+          </div>
+        ) : (
+          <div className='animate-in fade-in duration-500 space-y-6'>
             {currentQuestion.image_url && (
               <div className='rounded-xl overflow-hidden border'>
                 <img
+                  key={`img-${currentQuestion.id}`}
                   src={currentQuestion.image_url}
                   alt='Context'
                   className='w-full h-auto object-cover max-h-64'
@@ -255,7 +252,10 @@ export default function AdaptiveTestController({
             )}
 
             {currentQuestion.audio_url && (
-              <div className='bg-zinc-50 p-4 rounded-lg border'>
+              <div
+                className='bg-zinc-50 p-4 rounded-lg border'
+                key={`audio-${currentQuestion.id}`}
+              >
                 <audio controls className='w-full'>
                   <source src={currentQuestion.audio_url} type='audio/mpeg' />
                 </audio>
@@ -265,31 +265,31 @@ export default function AdaptiveTestController({
             <h2 className='text-2xl font-semibold leading-snug'>
               {currentQuestion.question_text}
             </h2>
-          </div>
 
-          <div className='grid gap-4'>
-            {['a', 'b', 'c', 'd'].map((letter) => {
-              const optionText = currentQuestion.options?.[letter]
-              if (!optionText) return null
-              return (
-                <Button
-                  key={letter}
-                  variant='outline'
-                  className='h-auto min-h-[4.5rem] justify-start px-6 text-left text-lg py-4 hover:bg-zinc-50 hover:border-zinc-400 transition-all group'
-                  onClick={() =>
-                    handleAnswer(letter === currentQuestion.correct_answer)
-                  }
-                >
-                  <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
-                    {letter}
-                  </span>
-                  <span className='flex-1'>{optionText}</span>
-                </Button>
-              )
-            })}
+            <div className='grid gap-4'>
+              {['a', 'b', 'c', 'd'].map((letter) => {
+                const optionText = currentQuestion.options?.[letter]
+                if (!optionText) return null
+                return (
+                  <Button
+                    key={`${currentQuestion.id}-${letter}`}
+                    variant='outline'
+                    className='h-auto min-h-[4.5rem] justify-start px-6 text-left text-lg py-4 hover:bg-zinc-50 hover:border-zinc-400 transition-all group'
+                    onClick={() =>
+                      handleAnswer(letter === currentQuestion.correct_answer)
+                    }
+                  >
+                    <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
+                      {letter}
+                    </span>
+                    <span className='flex-1'>{optionText}</span>
+                  </Button>
+                )
+              })}
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   )
 }
