@@ -202,7 +202,14 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                     {result.final_result}
                   </TableCell>
                   <TableCell className='text-right text-muted-foreground tabular-nums'>
-                    {new Date(result.created_at).toLocaleDateString()}
+                    {new Date(result.created_at).toLocaleString('en-GB', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false, // Set to true if you prefer AM/PM
+                    })}
                   </TableCell>
                 </TableRow>
               ))
