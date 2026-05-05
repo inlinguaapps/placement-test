@@ -55,8 +55,6 @@ export default function AdaptiveTestController({
   const [error, setError] = useState<string | null>(null)
   const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([])
   const [currentLevelHistory, setCurrentLevelHistory] = useState<boolean[]>([])
-
-  // New state to track the granular history of the entire test
   const [fullHistory, setFullHistory] = useState<HistoryEntry[]>([])
 
   const [stats, setStats] = useState({
@@ -68,7 +66,6 @@ export default function AdaptiveTestController({
   const finalizeTest = useCallback(
     async (finalLevel: string, total: number, history: HistoryEntry[]) => {
       setIsSaving(true)
-      // Pass the history array to your server action
       await updateTestResult(
         initialSession.sessionId,
         finalLevel,
@@ -95,7 +92,7 @@ export default function AdaptiveTestController({
         .from('test_questions')
         .select('*')
         .eq('test_type', testType)
-        .eq('level', level)
+        .eq('level', level) // This will now match 'Pre-A1' correctly
 
       if (excludeIds.length > 0) {
         query = query.not('id', 'in', `(${excludeIds.join(',')})`)
@@ -107,6 +104,7 @@ export default function AdaptiveTestController({
         console.error('Fetch error:', fetchError)
         setError('Technical error loading question.')
       } else if (!data) {
+        // If we run out of questions at a specific level, finalize the test
         finalizeTest(level, stats.totalAnswered, fullHistory)
       } else {
         setCurrentQuestion(data as Question)
@@ -132,6 +130,10 @@ export default function AdaptiveTestController({
       if (fetchError) {
         setError('Technical error loading initial question.')
       } else if (!data) {
+        // Log what was attempted to help debugging
+        console.warn(
+          `No questions found for ${initialSession.testType} at level ${initialSession.startingLevel}`,
+        )
         setError('No questions found for this test type.')
       } else {
         setCurrentQuestion(data as Question)
@@ -145,7 +147,6 @@ export default function AdaptiveTestController({
   const handleAnswer = async (isCorrect: boolean) => {
     if (!currentQuestion) return
 
-    // Track this specific interaction
     const newEntry: HistoryEntry = {
       level: currentQuestion.level,
       correct: isCorrect,
@@ -187,7 +188,6 @@ export default function AdaptiveTestController({
 
     setCurrentLevelHistory(levelChanged ? [] : newLevelHistory)
 
-    // Send partial results and full history log every 5 questions
     if (total % 5 === 0) {
       updateTestResult(
         initialSession.sessionId,
@@ -260,7 +260,7 @@ export default function AdaptiveTestController({
           <div className='flex-1 flex flex-col items-center justify-center space-y-4'>
             <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600'></div>
             <p className='text-zinc-500 italic'>
-              {isSaving ? 'Finalizing...' : 'Preparing question...'}
+              {isSaving ? 'Finalizing...' : 'Loading question...'}
             </p>
           </div>
         ) : (
@@ -320,8 +320,12 @@ export default function AdaptiveTestController({
 }
 
 function getLevelChange(current: string, direction: 'up' | 'down'): string {
-  const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+  // Use 'Pre-A1' with a hyphen to match the database enum
+  const levels = ['Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+
+  // Find index using a case-insensitive match for robustness
   const idx = levels.findIndex((l) => l.toLowerCase() === current.toLowerCase())
+
   if (idx === -1) return current
   if (direction === 'up')
     return idx < levels.length - 1 ? levels[idx + 1] : levels[idx]
