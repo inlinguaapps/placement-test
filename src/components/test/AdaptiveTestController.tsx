@@ -38,7 +38,7 @@ interface Props {
 
 export default function AdaptiveTestController({
   initialSession,
-  strategyName = 'HYBRID_STANDARD',
+  strategyName = 'STRICT_ACADEMIC',
 }: Props) {
   const supabase = createClient()
 
@@ -46,7 +46,7 @@ export default function AdaptiveTestController({
   const hasInitialized = useRef(false)
 
   const strategy = useMemo(
-    () => TEST_STRATEGIES[strategyName] || TEST_STRATEGIES['HYBRID_STANDARD'],
+    () => TEST_STRATEGIES[strategyName] || TEST_STRATEGIES['STRICT_ACADEMIC'],
     [strategyName],
   )
 
