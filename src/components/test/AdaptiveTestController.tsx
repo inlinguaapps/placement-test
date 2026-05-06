@@ -15,7 +15,7 @@ interface Question {
   question_text: string
   options: Record<string, string> // For listen_choose, these will be Image URLs
   correct_answer: string
-  q_type: 'text_only' | 'image_context' | 'listen_choose'
+  q_type: 'text_only' | 'image_context' | 'listen_choose' | 'dialogue'
   image_url?: string
   audio_url?: string
   video_url?: string
@@ -261,7 +261,52 @@ export default function AdaptiveTestController({
           </div>
         ) : (
           <div className='animate-in fade-in duration-500 space-y-6'>
-            {/* Image Context Layout */}
+            {/* 1. Instructions at the top */}
+            <h2 className='text-2xl font-semibold leading-snug'>
+              {currentQuestion.question_text}
+            </h2>
+
+            {/* 2. Dialogue-Specific Context */}
+            {currentQuestion.q_type === 'dialogue' &&
+              currentQuestion.image_url && (
+                <div className='flex flex-col w-full mb-4'>
+                  {/* Fred's Bubble */}
+                  {currentQuestion.transcript && (
+                    <div className='self-start ml-4 mb-3 relative bg-white border border-zinc-200 rounded-2xl px-6 py-3 shadow-sm'>
+                      <p className='text-lg text-zinc-700'>
+                        {currentQuestion.transcript}
+                      </p>
+                      {/* Bubble Tail pointing down */}
+                      <div className='absolute -bottom-2 left-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-zinc-200'></div>
+                      <div className='absolute -bottom-[7px] left-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white'></div>
+                    </div>
+                  )}
+
+                  {/* The Picture */}
+                  <div className='rounded-xl overflow-hidden border bg-white'>
+                    <img
+                      key={`img-${currentQuestion.id}`}
+                      src={currentQuestion.image_url}
+                      alt='Dialogue Context'
+                      className='w-full h-auto object-contain max-h-[400px] mx-auto'
+                    />
+                  </div>
+
+                  {/* Mum's Bubble - Now styled exactly like Fred's */}
+                  <div className='self-end mr-12 mt-3 relative bg-white border border-zinc-200 rounded-2xl w-28 h-12 flex items-center justify-center shadow-sm'>
+                    <div className='flex gap-1.5'>
+                      <span className='w-1.5 h-1.5 bg-zinc-300 rounded-full animate-bounce [animation-delay:-0.3s]'></span>
+                      <span className='w-1.5 h-1.5 bg-zinc-300 rounded-full animate-bounce [animation-delay:-0.15s]'></span>
+                      <span className='w-1.5 h-1.5 bg-zinc-300 rounded-full animate-bounce'></span>
+                    </div>
+                    {/* Bubble Tail pointing up towards Mum - Styled like Fred's but inverted */}
+                    <div className='absolute -top-2 right-8 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-zinc-200'></div>
+                    <div className='absolute -top-[7px] right-8 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-white'></div>
+                  </div>
+                </div>
+              )}
+
+            {/* 3. Standard Image Context (Untouched) */}
             {currentQuestion.q_type === 'image_context' &&
               currentQuestion.image_url && (
                 <div className='rounded-xl overflow-hidden border bg-white mb-4'>
@@ -274,7 +319,7 @@ export default function AdaptiveTestController({
                 </div>
               )}
 
-            {/* Audio Player (Required for listen_choose) */}
+            {/* Audio Player */}
             {currentQuestion.audio_url && (
               <div
                 className='bg-zinc-50 p-4 rounded-xl border mb-2'
@@ -286,14 +331,9 @@ export default function AdaptiveTestController({
               </div>
             )}
 
-            <h2 className='text-2xl font-semibold leading-snug'>
-              {currentQuestion.question_text}
-            </h2>
-
-            {/* Conditional Options Rendering */}
+            {/* Options Grid */}
             <div className='grid gap-4'>
               {currentQuestion.q_type === 'listen_choose' ? (
-                /* 3-Column Image Grid Layout */
                 <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
                   {['a', 'b', 'c'].map((letter) => (
                     <button
@@ -315,26 +355,54 @@ export default function AdaptiveTestController({
                   ))}
                 </div>
               ) : (
-                /* Standard Text List Layout */
-                ['a', 'b', 'c', 'd'].map((letter) => {
-                  const optionText = currentQuestion.options?.[letter]
-                  if (!optionText) return null
-                  return (
-                    <Button
-                      key={`${currentQuestion.id}-${letter}`}
-                      variant='outline'
-                      className='h-auto min-h-[4.5rem] justify-start px-6 text-left text-lg py-4 hover:bg-zinc-50 hover:border-zinc-400 transition-all group'
-                      onClick={() =>
-                        handleAnswer(letter === currentQuestion.correct_answer)
-                      }
-                    >
-                      <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
-                        {letter}
-                      </span>
-                      <span className='flex-1'>{optionText}</span>
-                    </Button>
-                  )
-                })
+                /* Dialogue Pills or Standard List */
+                <div
+                  className={
+                    currentQuestion.q_type === 'dialogue'
+                      ? 'flex flex-wrap gap-4 justify-center bg-blue-50/20 p-8 rounded-2xl border border-blue-100/50'
+                      : 'grid gap-4'
+                  }
+                >
+                  {['a', 'b', 'c', 'd'].map((letter) => {
+                    const optionText = currentQuestion.options?.[letter]
+                    if (!optionText) return null
+
+                    if (currentQuestion.q_type === 'dialogue') {
+                      return (
+                        <Button
+                          key={`${currentQuestion.id}-${letter}`}
+                          variant='outline'
+                          className='h-auto py-4 px-8 rounded-full border-2 border-blue-200 text-blue-700 bg-white shadow-sm hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all text-lg font-medium'
+                          onClick={() =>
+                            handleAnswer(
+                              letter === currentQuestion.correct_answer,
+                            )
+                          }
+                        >
+                          {optionText}
+                        </Button>
+                      )
+                    }
+
+                    return (
+                      <Button
+                        key={`${currentQuestion.id}-${letter}`}
+                        variant='outline'
+                        className='h-auto min-h-[4.5rem] justify-start px-6 text-left text-lg py-4 hover:bg-zinc-50 hover:border-zinc-400 transition-all group'
+                        onClick={() =>
+                          handleAnswer(
+                            letter === currentQuestion.correct_answer,
+                          )
+                        }
+                      >
+                        <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
+                          {letter}
+                        </span>
+                        <span className='flex-1'>{optionText}</span>
+                      </Button>
+                    )
+                  })}
+                </div>
               )}
             </div>
           </div>

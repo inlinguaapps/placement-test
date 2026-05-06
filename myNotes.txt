@@ -46,3 +46,30 @@ INSERT INTO test_questions (
 );
 
 *******************************************************************
+
+
+Adding dialogue questions"
+
+INSERT INTO test_questions (
+  test_type,
+  level,
+  q_type,
+  question_text,
+  transcript,
+  image_url,
+  options,
+  correct_answer
+) VALUES (
+  'Prathom',
+  'Pre-A1',
+  'dialogue',
+  'Fred is talking to his mum. Select the correct answer.',
+  'Can we go to the playground, Mum?',
+  'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/images/prathom/pre-a1/fred-mum.jpg',
+  '{
+    "a": "That''s a good idea.",
+    "b": "I''m sorry about that.",
+    "c": "Did you see the game?"
+  }',
+  'a'
+);
