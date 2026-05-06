@@ -13,8 +13,9 @@ interface Question {
   test_type: string
   level: string
   question_text: string
-  options: Record<string, string>
+  options: Record<string, string> // For listen_choose, these will be Image URLs
   correct_answer: string
+  q_type: 'text_only' | 'image_context' | 'listen_choose'
   image_url?: string
   audio_url?: string
   video_url?: string
@@ -92,7 +93,7 @@ export default function AdaptiveTestController({
         .from('test_questions')
         .select('*')
         .eq('test_type', testType)
-        .eq('level', level) // This will now match 'Pre-A1' correctly
+        .eq('level', level)
 
       if (excludeIds.length > 0) {
         query = query.not('id', 'in', `(${excludeIds.join(',')})`)
@@ -104,7 +105,6 @@ export default function AdaptiveTestController({
         console.error('Fetch error:', fetchError)
         setError('Technical error loading question.')
       } else if (!data) {
-        // If we run out of questions at a specific level, finalize the test
         finalizeTest(level, stats.totalAnswered, fullHistory)
       } else {
         setCurrentQuestion(data as Question)
@@ -130,10 +130,6 @@ export default function AdaptiveTestController({
       if (fetchError) {
         setError('Technical error loading initial question.')
       } else if (!data) {
-        // Log what was attempted to help debugging
-        console.warn(
-          `No questions found for ${initialSession.testType} at level ${initialSession.startingLevel}`,
-        )
         setError('No questions found for this test type.')
       } else {
         setCurrentQuestion(data as Question)
@@ -206,13 +202,13 @@ export default function AdaptiveTestController({
         <h2 className='text-3xl font-bold'>Test Complete!</h2>
         <div className='p-8 bg-amber-100 text-amber-700 rounded-2xl inline-block'>
           <p className='text-sm uppercase tracking-widest mb-1'>
-            Estimated Level
+            DEV MODE: Estimated Level
           </p>
           <span className='text-5xl font-black'>{stats.currentLevel}</span>
         </div>
         <p className='text-zinc-500 max-w-xs mx-auto text-balance'>
-          Your results have been recorded. Our team in Bangkok will review your
-          score shortly.
+          Your results have been recorded. Our team will review your score
+          shortly.
         </p>
         <Button
           size='lg'
@@ -265,20 +261,23 @@ export default function AdaptiveTestController({
           </div>
         ) : (
           <div className='animate-in fade-in duration-500 space-y-6'>
-            {currentQuestion.image_url && (
-              <div className='rounded-xl overflow-hidden border'>
-                <img
-                  key={`img-${currentQuestion.id}`}
-                  src={currentQuestion.image_url}
-                  alt='Context'
-                  className='w-full h-auto object-cover max-h-64'
-                />
-              </div>
-            )}
+            {/* Image Context Layout */}
+            {currentQuestion.q_type === 'image_context' &&
+              currentQuestion.image_url && (
+                <div className='rounded-xl overflow-hidden border bg-white mb-4'>
+                  <img
+                    key={`img-${currentQuestion.id}`}
+                    src={currentQuestion.image_url}
+                    alt='Context'
+                    className='w-full h-auto object-contain max-h-[400px] mx-auto'
+                  />
+                </div>
+              )}
 
+            {/* Audio Player (Required for listen_choose) */}
             {currentQuestion.audio_url && (
               <div
-                className='bg-zinc-50 p-4 rounded-lg border'
+                className='bg-zinc-50 p-4 rounded-xl border mb-2'
                 key={`audio-${currentQuestion.id}`}
               >
                 <audio controls className='w-full'>
@@ -291,26 +290,52 @@ export default function AdaptiveTestController({
               {currentQuestion.question_text}
             </h2>
 
+            {/* Conditional Options Rendering */}
             <div className='grid gap-4'>
-              {['a', 'b', 'c', 'd'].map((letter) => {
-                const optionText = currentQuestion.options?.[letter]
-                if (!optionText) return null
-                return (
-                  <Button
-                    key={`${currentQuestion.id}-${letter}`}
-                    variant='outline'
-                    className='h-auto min-h-[4.5rem] justify-start px-6 text-left text-lg py-4 hover:bg-zinc-50 hover:border-zinc-400 transition-all group'
-                    onClick={() =>
-                      handleAnswer(letter === currentQuestion.correct_answer)
-                    }
-                  >
-                    <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
-                      {letter}
-                    </span>
-                    <span className='flex-1'>{optionText}</span>
-                  </Button>
-                )
-              })}
+              {currentQuestion.q_type === 'listen_choose' ? (
+                /* 3-Column Image Grid Layout */
+                <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+                  {['a', 'b', 'c'].map((letter) => (
+                    <button
+                      key={`${currentQuestion.id}-${letter}`}
+                      onClick={() =>
+                        handleAnswer(letter === currentQuestion.correct_answer)
+                      }
+                      className='group relative aspect-square overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-zinc-900 hover:shadow-md active:scale-95'
+                    >
+                      <img
+                        src={currentQuestion.options[letter]}
+                        alt={`Option ${letter}`}
+                        className='h-full w-full object-contain'
+                      />
+                      <div className='absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold uppercase text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors'>
+                        {letter}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                /* Standard Text List Layout */
+                ['a', 'b', 'c', 'd'].map((letter) => {
+                  const optionText = currentQuestion.options?.[letter]
+                  if (!optionText) return null
+                  return (
+                    <Button
+                      key={`${currentQuestion.id}-${letter}`}
+                      variant='outline'
+                      className='h-auto min-h-[4.5rem] justify-start px-6 text-left text-lg py-4 hover:bg-zinc-50 hover:border-zinc-400 transition-all group'
+                      onClick={() =>
+                        handleAnswer(letter === currentQuestion.correct_answer)
+                      }
+                    >
+                      <span className='mr-4 shrink-0 flex items-center justify-center w-8 h-8 rounded-full border border-zinc-200 bg-zinc-50 group-hover:bg-zinc-900 group-hover:text-white text-sm font-bold uppercase transition-colors'>
+                        {letter}
+                      </span>
+                      <span className='flex-1'>{optionText}</span>
+                    </Button>
+                  )
+                })
+              )}
             </div>
           </div>
         )}
@@ -320,10 +345,7 @@ export default function AdaptiveTestController({
 }
 
 function getLevelChange(current: string, direction: 'up' | 'down'): string {
-  // Use 'Pre-A1' with a hyphen to match the database enum
   const levels = ['Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
-
-  // Find index using a case-insensitive match for robustness
   const idx = levels.findIndex((l) => l.toLowerCase() === current.toLowerCase())
 
   if (idx === -1) return current

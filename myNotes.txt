@@ -1,0 +1,48 @@
+Adding image questions:
+
+INSERT INTO test_questions (
+  test_type, 
+  level, 
+  question_text, 
+  options, 
+  correct_answer, 
+  q_type, 
+  image_url
+) VALUES (
+  'Prathom', -- Assuming your test_type enum has 'business'
+  'Pre-A1',   -- Assuming your level enum has 'Pre-A1'
+  'What are they?',
+  '{"a": "They are snakes.", "b": "They are dogs.", "c": "They are birds", "d": "They are cats."}',
+  'c',
+  'image_context', -- Manually setting the type
+  'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/birds.jpg' -- *** Replace this with the URL from Supabase Storage ***
+);
+
+
+*********************************************************************
+
+Adding listen_choose questions:
+
+INSERT INTO test_questions (
+  test_type, 
+  level, 
+  question_text, 
+  correct_answer, 
+  q_type, 
+  audio_url, 
+  options
+) VALUES (
+  'Prathom', -- Replace with your actual test_type if different
+  'Pre-A1',              -- Targeted level for this question
+  'What will Natalie wear to the party?',
+  'a',               -- 'a' matches the jeans + star t-shirt
+  'listen_choose',
+  'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/audio/prathom/pre-a1/what-will-natalie-wear-to_-the-party.mp3',
+  jsonb_build_object(
+    'a', 'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/images/prathom/pre-a1/natalie1.jpg',
+    'b', 'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/images/prathom/pre-a1/natalie2.jpg',
+    'c', 'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/images/prathom/pre-a1/natalie3.jpg'
+  )
+);
+
+*******************************************************************
