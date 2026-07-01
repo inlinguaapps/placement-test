@@ -23,6 +23,7 @@ interface Question {
     | 'dialogue'
     | 'audio'
     | 'video'
+  sort_order: number // Add this line
   image_url?: string
   audio_url?: string
   video_url?: string
@@ -114,13 +115,16 @@ export default function AdaptiveTestController({
         query = query.not('id', 'in', `(${excludeIds.join(',')})`)
       }
 
-      const { data, error: fetchError } = await query.limit(1).maybeSingle()
+      // Sort ascending so it naturally grabs 1, then 2, then 3...
+      const { data, error: fetchError } = await query
+        .order('sort_order', { ascending: true })
+        .limit(1)
+        .maybeSingle()
 
       if (fetchError) {
         console.error('Fetch error:', fetchError)
         setError('Technical error loading question.')
       } else if (!data) {
-        // Safe fallback out of material
         finalizeTest(stats.currentLevel, stats.totalAnswered, fullHistory)
       } else {
         setCurrentQuestion(data as Question)
