@@ -198,7 +198,18 @@ export default function AdaptiveTestController({
       // Calculate and update the highest level passed so far
       let updatedFloor = highestPassedLevel
       setHighestPassedLevel((prevFloor) => {
-        const levels = ['Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+        const levels = [
+          'Pre-A1',
+          'A1',
+          'A1+',
+          'A2',
+          'A2+',
+          'B1',
+          'B1+',
+          'B2',
+          'C1',
+          'C2',
+        ]
         const currentIdx = levels.findIndex(
           (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
         )
@@ -634,7 +645,18 @@ function getLevelChange(
   direction: 'up' | 'down',
   floorLevel: string | null,
 ): string {
-  const levels = ['Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+  const levels = [
+    'Pre-A1',
+    'A1',
+    'A1+',
+    'A2',
+    'A2+',
+    'B1',
+    'B1+',
+    'B2',
+    'C1',
+    'C2',
+  ]
   const idx = levels.findIndex((l) => l.toLowerCase() === current.toLowerCase())
 
   if (idx === -1) return current
