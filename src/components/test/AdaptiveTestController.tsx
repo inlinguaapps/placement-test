@@ -140,6 +140,32 @@ export default function AdaptiveTestController({
     ],
   )
 
+  // useEffect(() => {
+  //   if (hasInitialized.current) return
+  //   hasInitialized.current = true
+
+  //   async function loadInitialQuestion() {
+  //     const { data, error: fetchError } = await supabase
+  //       .from('test_questions')
+  //       .select('*')
+  //       .eq('test_type', initialSession.testType)
+  //       .eq('level', initialSession.startingLevel)
+  //       .limit(1)
+  //       .maybeSingle()
+
+  //     if (fetchError) {
+  //       setError('Technical error loading initial question.')
+  //     } else if (!data) {
+  //       setError('No questions found for this test type.')
+  //     } else {
+  //       setCurrentQuestion(data as Question)
+  //     }
+  //     setLoading(false)
+  //   }
+
+  //   loadInitialQuestion()
+  // }, [initialSession, supabase])
+
   useEffect(() => {
     if (hasInitialized.current) return
     hasInitialized.current = true
@@ -150,6 +176,7 @@ export default function AdaptiveTestController({
         .select('*')
         .eq('test_type', initialSession.testType)
         .eq('level', initialSession.startingLevel)
+        .order('sort_order', { ascending: true }) // ✅ ADD THIS LINE RIGHT HERE
         .limit(1)
         .maybeSingle()
 
