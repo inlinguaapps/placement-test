@@ -23,7 +23,7 @@
 //     | 'dialogue'
 //     | 'audio'
 //     | 'video'
-//   sort_order: number // Add this line
+//   sort_order: number
 //   image_url?: string
 //   audio_url?: string
 //   video_url?: string
@@ -140,32 +140,6 @@
 //     ],
 //   )
 
-//   // useEffect(() => {
-//   //   if (hasInitialized.current) return
-//   //   hasInitialized.current = true
-
-//   //   async function loadInitialQuestion() {
-//   //     const { data, error: fetchError } = await supabase
-//   //       .from('test_questions')
-//   //       .select('*')
-//   //       .eq('test_type', initialSession.testType)
-//   //       .eq('level', initialSession.startingLevel)
-//   //       .limit(1)
-//   //       .maybeSingle()
-
-//   //     if (fetchError) {
-//   //       setError('Technical error loading initial question.')
-//   //     } else if (!data) {
-//   //       setError('No questions found for this test type.')
-//   //     } else {
-//   //       setCurrentQuestion(data as Question)
-//   //     }
-//   //     setLoading(false)
-//   //   }
-
-//   //   loadInitialQuestion()
-//   // }, [initialSession, supabase])
-
 //   useEffect(() => {
 //     if (hasInitialized.current) return
 //     hasInitialized.current = true
@@ -176,7 +150,7 @@
 //         .select('*')
 //         .eq('test_type', initialSession.testType)
 //         .eq('level', initialSession.startingLevel)
-//         .order('sort_order', { ascending: true }) // ✅ ADD THIS LINE RIGHT HERE
+//         .order('sort_order', { ascending: true })
 //         .limit(1)
 //         .maybeSingle()
 
@@ -260,6 +234,7 @@
 //     // 3. MINIMUM PERFORMANCE STABILITY TERMINATION GUARD
 //     const isAtMin = total >= strategy.minQuestions
 //     const isStable = !levelChanged && newLevelHistory.length >= 3
+//     const hasEvaluatedCurrentLevel = currentLevelHistory.length >= 3;
 //     if (isAtMin && isStable) {
 //       await finalizeTest(nextLevel, total, updatedFullHistory)
 //       return
@@ -403,8 +378,9 @@
 //                 </div>
 //               )}
 
-//             {/* DEDICATED AUDIO COMPONENT VIEW (PLAY ONCE) */}
-//             {currentQuestion.q_type === 'audio' &&
+//             {/* DEDICATED AUDIO COMPONENT VIEW (PLAY ONCE) - INCLUDES AUDIO & LISTEN_CHOOSE */}
+//             {(currentQuestion.q_type === 'audio' ||
+//               currentQuestion.q_type === 'listen_choose') &&
 //               currentQuestion.audio_url && (
 //                 <div className='bg-zinc-50 p-8 rounded-2xl border mb-6 max-w-xl mx-auto w-full text-center space-y-4 shadow-sm'>
 //                   <audio
@@ -498,9 +474,6 @@
 //                           ? 'Listen closely...'
 //                           : 'Listen once only'}
 //                     </p>
-//                     {/* <p className='text-xs text-zinc-400 italic'>
-//                       You can only listen to this track once.
-//                     </p> */}
 //                   </div>
 //                 </div>
 //               )}
@@ -704,7 +677,6 @@
 
 //   return current
 // }
-
 
 'use client'
 
@@ -938,12 +910,12 @@ export default function AdaptiveTestController({
     }
 
     // 3. MINIMUM PERFORMANCE STABILITY TERMINATION GUARD
-    const isAtMin = total >= strategy.minQuestions
-    const isStable = !levelChanged && newLevelHistory.length >= 3
-    if (isAtMin && isStable) {
-      await finalizeTest(nextLevel, total, updatedFullHistory)
-      return
-    }
+    // const isAtMin = total >= strategy.minQuestions
+    // const isStable = !levelChanged && newLevelHistory.length >= 3
+    // if (isAtMin && isStable) {
+    //   await finalizeTest(nextLevel, total, updatedFullHistory)
+    //   return
+    // }
 
     // Sync state updates
     setStats((prev) => ({

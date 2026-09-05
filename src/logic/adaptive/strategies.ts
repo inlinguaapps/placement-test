@@ -34,27 +34,23 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
       history.slice(-2).every((v) => v === false) && history.length >= 2,
   },
   // Dynamic 6-Question window with fast-exit triggers
-  SIX_QUESTION_DYNAMIC: {
-    name: 'Dynamic 6-Question Window',
-    minQuestions: 15,
+ SIX_QUESTION_DYNAMIC: {
+    name: 'Universal Dynamic Assessment',
+    minQuestions: 18, // Raised from 15 so every test gets a thorough baseline
     maxQuestions: 30,
 
-    // Moves up the second 4 correct answers are found in the recent window
+    // Moves up if 4 correct answers are found in the recent window of up to 6
     shouldMoveUp: (history) => {
-      if (history.length < 4) return false // Needs at least 4 questions to have 4 correct
-
-      // Look at the last 6 questions (or fewer if the test just started)
-      const recentHistory = history.slice(-6)
-      return recentHistory.filter((v) => v === true).length >= 4
+      if (history.length < 4) return false
+      const recent = history.slice(-6)
+      return recent.filter((v) => v === true).length >= 4
     },
 
-    // Drops down the second 3 wrong answers are found in the recent window
+    // Drops down if 3 wrong answers are found in the recent window of up to 6
     shouldMoveDown: (history) => {
-      if (history.length < 3) return false // Needs at least 3 questions to have 3 wrong
-
-      // Look at the last 6 questions (or fewer if the test just started)
-      const recentHistory = history.slice(-6)
-      return recentHistory.filter((v) => v === false).length >= 3
+      if (history.length < 3) return false
+      const recent = history.slice(-6)
+      return recent.filter((v) => v === false).length >= 3
     },
   },
 }
