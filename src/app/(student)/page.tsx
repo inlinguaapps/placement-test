@@ -37,6 +37,12 @@ export default function SelectionPage() {
               Adult
             </Button>
           </Link>
+
+           <Link href='/' className='flex-1'>
+            <Button className='w-full h-16 text-lg border-2' variant='outline'>
+              IELTS
+            </Button>
+          </Link>
         </div>
       </div>
 
