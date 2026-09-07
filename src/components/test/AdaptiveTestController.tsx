@@ -1,4 +1,4 @@
-// // src\components\test\AdaptiveTestController.tsx
+// // // src\components\test\AdaptiveTestController.tsx
 
 // 'use client'
 
@@ -65,7 +65,8 @@
 //   initialSession,
 //   strategyName = 'SIX_QUESTION_DYNAMIC',
 // }: Props) {
-//   const supabase = createClient()
+//   // Memoize client to prevent recreation on every render pass
+//   const supabase = useMemo(() => createClient(), [])
 //   const hasInitialized = useRef(false)
 
 //   const strategy = useMemo(
@@ -83,8 +84,10 @@
 //   const [fullHistory, setFullHistory] = useState<HistoryEntry[]>([])
 //   const [mediaPlaying, setMediaPlaying] = useState(false)
 //   const [playedMediaIds, setPlayedMediaIds] = useState<string[]>([])
+//   const [recommendedBooks, setRecommendedBooks] = useState<
+//     { id: string; name: string; inlingua_level: number | null }[]
+//   >([])
 
-//   // Highest level successfully passed floor tracker
 //   const [highestPassedLevel, setHighestPassedLevel] = useState<string | null>(
 //     null,
 //   )
@@ -95,7 +98,6 @@
 //     isFinished: false,
 //   })
 
-//   // Helper function to calculate level changes without relying on stale closures
 //   const calculateNextLevel = useCallback(
 //     (
 //       current: string,
@@ -108,7 +110,9 @@
 //       if (idx === -1) return current
 
 //       if (direction === 'up') {
-//         return idx < CEFR_LEVELS.length - 1 ? CEFR_LEVELS[idx + 1] : CEFR_LEVELS[idx]
+//         return idx < CEFR_LEVELS.length - 1
+//           ? CEFR_LEVELS[idx + 1]
+//           : CEFR_LEVELS[idx]
 //       }
 
 //       if (direction === 'down') {
@@ -140,12 +144,25 @@
 //     async (finalLevel: string, total: number, history: HistoryEntry[]) => {
 //       stopAllMedia()
 //       setIsSaving(true)
+
+//       const { data: booksData } = await supabase
+//         .from('books')
+//         .select('id, name, inlingua_level')
+//         .eq('cefr_level', finalLevel)
+//         .eq('test_identity', initialSession.testType)
+//         .order('inlingua_level', { ascending: true })
+
+//       if (booksData) {
+//         setRecommendedBooks(booksData)
+//       }
+
 //       await updateTestResult(
 //         initialSession.sessionId,
 //         finalLevel,
 //         true,
 //         history,
 //       )
+
 //       setStats((prev) => ({
 //         ...prev,
 //         isFinished: true,
@@ -154,11 +171,17 @@
 //       }))
 //       setIsSaving(false)
 //     },
-//     [initialSession.sessionId, stopAllMedia],
+//     [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
 //   )
 
 //   const fetchQuestion = useCallback(
-//     async (testType: string, level: string, excludeIds: string[]) => {
+//     async (
+//       testType: string,
+//       level: string,
+//       excludeIds: string[],
+//       currentTotalAnswered: number,
+//       historyEntries: HistoryEntry[],
+//     ) => {
 //       setLoading(true)
 //       setError(null)
 
@@ -181,13 +204,14 @@
 //         console.error('Fetch error:', fetchError)
 //         setError('Technical error loading question.')
 //       } else if (!data) {
-//         finalizeTest(stats.currentLevel, stats.totalAnswered, fullHistory)
+//         // Fall back gracefully using direct arguments to prevent stale state issues
+//         await finalizeTest(level, currentTotalAnswered, historyEntries)
 //       } else {
 //         setCurrentQuestion(data as Question)
 //       }
 //       setLoading(false)
 //     },
-//     [supabase, finalizeTest, stats.currentLevel, stats.totalAnswered, fullHistory],
+//     [supabase, finalizeTest],
 //   )
 
 //   useEffect(() => {
@@ -234,13 +258,11 @@
 
 //     const total = stats.totalAnswered + 1
 
-//     // 1. ABSOLUTE MAXIMUM CIRCUIT BREAKER
 //     if (total >= strategy.maxQuestions) {
 //       await finalizeTest(stats.currentLevel, total, updatedFullHistory)
 //       return
 //     }
 
-//     // 2. RUN EMBEDDED STRATEGY CRITERIA
 //     const newLevelHistory = [...currentLevelHistory, isCorrect]
 //     let nextLevel = stats.currentLevel
 //     let levelChanged = false
@@ -270,7 +292,6 @@
 //       levelChanged = nextLevel !== stats.currentLevel
 //     }
 
-//     // Sync state updates
 //     setStats((prev) => ({
 //       ...prev,
 //       currentLevel: nextLevel,
@@ -279,7 +300,6 @@
 
 //     setCurrentLevelHistory(levelChanged ? [] : newLevelHistory)
 
-//     // Intermediate Background Save (Every 5 questions)
 //     if (total % 5 === 0) {
 //       updateTestResult(
 //         initialSession.sessionId,
@@ -289,28 +309,60 @@
 //       )
 //     }
 
-//     fetchQuestion(initialSession.testType, nextLevel, updatedUsedIds)
+//     fetchQuestion(
+//       initialSession.testType,
+//       nextLevel,
+//       updatedUsedIds,
+//       total,
+//       updatedFullHistory,
+//     )
 //   }
-
-//   // --- UI RENDERING BELOW ---
 
 //   if (stats.isFinished) {
 //     return (
-//       <div className='text-center space-y-4 py-10'>
+//       <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
 //         <h2 className='text-3xl font-bold'>Test Complete!</h2>
-//         <div className='p-8 bg-amber-100 text-amber-700 rounded-2xl inline-block'>
-//           <p className='text-sm uppercase tracking-widest mb-1'>
-//             Estimated Level
+
+//         <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
+//           <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
+//             DEV MODE: Estimated Level
 //           </p>
-//           <span className='text-5xl font-black'>{stats.currentLevel}</span>
+//           <span className='text-6xl font-black'>{stats.currentLevel}</span>
 //         </div>
-//         <p className='text-zinc-500 max-w-xs mx-auto text-balance'>
-//           Your results have been recorded. Our team will review your score
-//           shortly.
+
+//         {recommendedBooks.length > 0 && (
+//           <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
+//             <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
+//               Recommended Coursebooks ({initialSession.testType})
+//             </h3>
+//             <ul className='space-y-2.5'>
+//               {recommendedBooks.map((book) => (
+//                 <li
+//                   key={book.id}
+//                   className='flex items-center justify-between text-zinc-800 font-medium text-sm'
+//                 >
+//                   <div className='flex items-center gap-2'>
+//                     <span className='text-amber-500'>📖</span>
+//                     <span>{book.name}</span>
+//                   </div>
+//                   {book.inlingua_level !== null && (
+//                     <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
+//                       Level {book.inlingua_level}
+//                     </span>
+//                   )}
+//                 </li>
+//               ))}
+//             </ul>
+//           </div>
+//         )}
+
+//         <p className='text-zinc-500 text-sm text-balance'>
+//           Your results have been recorded. Our team will review your score shortly.
 //         </p>
+
 //         <Button
 //           size='lg'
-//           className='w-full max-w-xs'
+//           className='w-full'
 //           onClick={() => (window.location.href = '/')}
 //         >
 //           Finish
@@ -415,64 +467,18 @@
 //                     if (!audioUrl) return null
 
 //                     return (
-//                       <div
+//                       <ImageListenOptionCard
 //                         key={`${currentQuestion.id}-${letter}`}
-//                         className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'
-//                       >
-//                         <div className='flex items-center justify-center w-full'>
-//                           <audio
-//                             id={`opt-audio-${letter}`}
-//                             src={audioUrl}
-//                             onPlay={() => setMediaPlaying(true)}
-//                             onEnded={() => setMediaPlaying(false)}
-//                             onPause={() => setMediaPlaying(false)}
-//                           />
-//                           <button
-//                             type='button'
-//                             disabled={mediaPlaying}
-//                             className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
-//                             onClick={() => {
-//                               if (mediaPlaying) return
-//                               const el = document.getElementById(
-//                                 `opt-audio-${letter}`,
-//                               ) as HTMLAudioElement
-//                               el?.play()
-//                             }}
-//                           >
-//                             <svg
-//                               className='w-7 h-7 text-white fill-current ml-1'
-//                               viewBox='0 0 24 24'
-//                             >
-//                               <path d='M8 5v14l11-7z' />
-//                             </svg>
-//                           </button>
-//                         </div>
-
-//                         <button
-//                           type='button'
-//                           className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
-//                           onClick={() =>
-//                             handleAnswer(
-//                               letter === currentQuestion.correct_answer,
-//                             )
-//                           }
-//                         >
-//                           <svg
-//                             style={{ width: '60px', height: '60px' }}
-//                             className='shrink-0 transition-transform group-hover:scale-110'
-//                             fill='none'
-//                             stroke='currentColor'
-//                             strokeWidth={3.5}
-//                             viewBox='0 0 24 24'
-//                           >
-//                             <path
-//                               strokeLinecap='round'
-//                               strokeLinejoin='round'
-//                               d='M5 13l4 4L19 7'
-//                             />
-//                           </svg>
-//                         </button>
-//                       </div>
+//                         letter={letter}
+//                         audioUrl={audioUrl}
+//                         mediaPlaying={mediaPlaying}
+//                         setMediaPlaying={setMediaPlaying}
+//                         onSelectOption={() =>
+//                           handleAnswer(
+//                             letter === currentQuestion.correct_answer,
+//                           )
+//                         }
+//                       />
 //                     )
 //                   })}
 //                 </div>
@@ -595,7 +601,76 @@
 //   )
 // }
 
-// // --- SUB-COMPONENTS FOR MEDIA PLAYERS ---
+// // --- SUB-COMPONENTS ---
+
+// interface ImageListenOptionProps {
+//   letter: string
+//   audioUrl: string
+//   mediaPlaying: boolean
+//   setMediaPlaying: (playing: boolean) => void
+//   onSelectOption: () => void
+// }
+
+// function ImageListenOptionCard({
+//   letter,
+//   audioUrl,
+//   mediaPlaying,
+//   setMediaPlaying,
+//   onSelectOption,
+// }: ImageListenOptionProps) {
+//   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+//   return (
+//     <div className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'>
+//       <div className='flex items-center justify-center w-full'>
+//         <audio
+//           ref={audioRef}
+//           src={audioUrl}
+//           onPlay={() => setMediaPlaying(true)}
+//           onEnded={() => setMediaPlaying(false)}
+//           onPause={() => setMediaPlaying(false)}
+//         />
+//         <button
+//           type='button'
+//           disabled={mediaPlaying}
+//           className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
+//           onClick={() => {
+//             if (mediaPlaying || !audioRef.current) return
+//             audioRef.current.play()
+//           }}
+//         >
+//           <svg
+//             className='w-7 h-7 text-white fill-current ml-1'
+//             viewBox='0 0 24 24'
+//           >
+//             <path d='M8 5v14l11-7z' />
+//           </svg>
+//         </button>
+//       </div>
+
+//       <button
+//         type='button'
+//         className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
+//         onClick={onSelectOption}
+//       >
+//         <svg
+//           style={{ width: '60px', height: '60px' }}
+//           className='shrink-0 transition-transform group-hover:scale-110'
+//           fill='none'
+//           stroke='currentColor'
+//           strokeWidth={3.5}
+//           viewBox='0 0 24 24'
+//         >
+//           <path
+//             strokeLinecap='round'
+//             strokeLinejoin='round'
+//             d='M5 13l4 4L19 7'
+//           />
+//         </svg>
+//       </button>
+//     </div>
+//   )
+// }
 
 // interface MediaProps {
 //   questionId: string
@@ -614,19 +689,19 @@
 //   setPlayedMediaIds,
 // }: MediaProps & { audioUrl: string }) {
 //   const isPlayed = playedMediaIds.includes(questionId)
+//   const audioRef = useRef<HTMLAudioElement | null>(null)
 
 //   return (
 //     <div className='bg-zinc-50 p-8 rounded-2xl border mb-6 max-w-xl mx-auto w-full text-center space-y-4 shadow-sm'>
 //       <audio
-//         id={`audio-${questionId}`}
+//         ref={audioRef}
 //         key={audioUrl}
+//         src={audioUrl}
 //         onEnded={() => {
 //           setMediaPlaying(false)
 //           setPlayedMediaIds((prev) => [...prev, questionId])
 //         }}
-//       >
-//         <source src={audioUrl} type='audio/mpeg' />
-//       </audio>
+//       />
 
 //       <div className='flex justify-center items-center py-2'>
 //         <button
@@ -639,11 +714,8 @@
 //                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
 //           }`}
 //           onClick={() => {
-//             const audioEl = document.getElementById(
-//               `audio-${questionId}`,
-//             ) as HTMLAudioElement
-//             if (audioEl) {
-//               audioEl.play()
+//             if (audioRef.current) {
+//               audioRef.current.play()
 //               setMediaPlaying(true)
 //             }
 //           }}
@@ -715,11 +787,12 @@
 //   setPlayedMediaIds,
 // }: MediaProps & { videoUrl: string }) {
 //   const isPlayed = playedMediaIds.includes(questionId)
+//   const videoRef = useRef<HTMLVideoElement | null>(null)
 
 //   return (
 //     <div className='bg-zinc-950 rounded-2xl border shadow-md max-w-2xl mx-auto w-full overflow-hidden mb-6 relative group aspect-video'>
 //       <video
-//         id={`video-${questionId}`}
+//         ref={videoRef}
 //         key={videoUrl}
 //         playsInline
 //         className='w-full h-full object-contain mx-auto bg-black'
@@ -741,11 +814,8 @@
 //                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
 //             }`}
 //             onClick={() => {
-//               const videoEl = document.getElementById(
-//                 `video-${questionId}`,
-//               ) as HTMLVideoElement
-//               if (videoEl) {
-//                 videoEl.play()
+//               if (videoRef.current) {
+//                 videoRef.current.play()
 //                 setMediaPlaying(true)
 //               }
 //             }}
@@ -791,8 +861,6 @@
 //   )
 // }
 
-// src\components\test\AdaptiveTestController.tsx
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -801,6 +869,7 @@ import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
 import { TEST_STRATEGIES } from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
+import { getLevelsForTestType } from '@/types/level-config'
 
 interface Question {
   id: string
@@ -810,14 +879,14 @@ interface Question {
   options: Record<string, string>
   correct_answer: string
   q_type:
-  | 'text_only'
-  | 'image_context'
-  | 'image_listen_choose'
-  | 'listen_choose'
-  | 'dialogue'
-  | 'audio'
-  | 'video'
-  | 'reading'
+    | 'text_only'
+    | 'image_context'
+    | 'image_listen_choose'
+    | 'listen_choose'
+    | 'dialogue'
+    | 'audio'
+    | 'video'
+    | 'reading'
   sort_order: number
   image_url?: string
   audio_url?: string
@@ -841,25 +910,18 @@ interface Props {
   strategyName?: StrategyName
 }
 
-const CEFR_LEVELS = [
-  'Pre-A1',
-  'A1',
-  'A1+',
-  'A2',
-  'A2+',
-  'B1',
-  'B1+',
-  'B2',
-  'C1',
-  'C2',
-]
-
 export default function AdaptiveTestController({
   initialSession,
   strategyName = 'SIX_QUESTION_DYNAMIC',
 }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const hasInitialized = useRef(false)
+
+  // Retrieve category-specific level ladder (e.g. ['Pre-A1', 'A1', 'A1+'] for Prathom)
+  const categoryLevels = useMemo(
+    () => getLevelsForTestType(initialSession.testType),
+    [initialSession.testType],
+  )
 
   const strategy = useMemo(
     () =>
@@ -876,10 +938,10 @@ export default function AdaptiveTestController({
   const [fullHistory, setFullHistory] = useState<HistoryEntry[]>([])
   const [mediaPlaying, setMediaPlaying] = useState(false)
   const [playedMediaIds, setPlayedMediaIds] = useState<string[]>([])
-  const [recommendedBooks, setRecommendedBooks] = useState<{ id: string; name: string; inlingua_level: number | null }[]
+  const [recommendedBooks, setRecommendedBooks] = useState<
+    { id: string; name: string; inlingua_level: number | null }[]
   >([])
 
-  // Highest level successfully passed floor tracker
   const [highestPassedLevel, setHighestPassedLevel] = useState<string | null>(
     null,
   )
@@ -890,35 +952,36 @@ export default function AdaptiveTestController({
     isFinished: false,
   })
 
-  // Helper function to calculate level changes without relying on stale closures
   const calculateNextLevel = useCallback(
     (
       current: string,
       direction: 'up' | 'down',
       floorLevel: string | null,
     ): string => {
-      const idx = CEFR_LEVELS.findIndex(
+      const idx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === current.toLowerCase(),
       )
       if (idx === -1) return current
 
       if (direction === 'up') {
-        return idx < CEFR_LEVELS.length - 1 ? CEFR_LEVELS[idx + 1] : CEFR_LEVELS[idx]
+        return idx < categoryLevels.length - 1
+          ? categoryLevels[idx + 1]
+          : categoryLevels[idx]
       }
 
       if (direction === 'down') {
         if (floorLevel) {
-          const floorIdx = CEFR_LEVELS.findIndex(
+          const floorIdx = categoryLevels.findIndex(
             (l) => l.toLowerCase() === floorLevel.toLowerCase(),
           )
-          if (idx <= floorIdx) return CEFR_LEVELS[idx]
+          if (idx <= floorIdx) return categoryLevels[idx]
         }
-        return idx > 0 ? CEFR_LEVELS[idx - 1] : CEFR_LEVELS[idx]
+        return idx > 0 ? categoryLevels[idx - 1] : categoryLevels[idx]
       }
 
       return current
     },
-    [],
+    [categoryLevels],
   )
 
   const stopAllMedia = useCallback(() => {
@@ -931,44 +994,48 @@ export default function AdaptiveTestController({
     })
   }, [])
 
- // 2. Update finalizeTest to query Supabase dynamically
-const finalizeTest = useCallback(
-  async (finalLevel: string, total: number, history: HistoryEntry[]) => {
-    stopAllMedia()
-    setIsSaving(true)
+  const finalizeTest = useCallback(
+    async (finalLevel: string, total: number, history: HistoryEntry[]) => {
+      stopAllMedia()
+      setIsSaving(true)
 
-    // Fetch matching books for the achieved CEFR level and test stream
-    const { data: booksData } = await supabase
-      .from('books') // <-- Replace with your actual table name if different
-      .select('id, name, inlingua_level')
-      .eq('cefr_level', finalLevel)
-      .eq('test_identity', initialSession.testType)
-      .order('inlingua_level', { ascending: true })
+      const { data: booksData } = await supabase
+        .from('books')
+        .select('id, name, inlingua_level')
+        .eq('cefr_level', finalLevel)
+        .eq('test_identity', initialSession.testType)
+        .order('inlingua_level', { ascending: true })
 
-    if (booksData) {
-      setRecommendedBooks(booksData)
-    }
+      if (booksData) {
+        setRecommendedBooks(booksData)
+      }
 
-    await updateTestResult(
-      initialSession.sessionId,
-      finalLevel,
-      true,
-      history,
-    )
+      await updateTestResult(
+        initialSession.sessionId,
+        finalLevel,
+        true,
+        history,
+      )
 
-    setStats((prev) => ({
-      ...prev,
-      isFinished: true,
-      totalAnswered: total,
-      currentLevel: finalLevel,
-    }))
-    setIsSaving(false)
-  },
-  [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
-)
+      setStats((prev) => ({
+        ...prev,
+        isFinished: true,
+        totalAnswered: total,
+        currentLevel: finalLevel,
+      }))
+      setIsSaving(false)
+    },
+    [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
+  )
 
   const fetchQuestion = useCallback(
-    async (testType: string, level: string, excludeIds: string[]) => {
+    async (
+      testType: string,
+      level: string,
+      excludeIds: string[],
+      currentTotalAnswered: number,
+      historyEntries: HistoryEntry[],
+    ) => {
       setLoading(true)
       setError(null)
 
@@ -991,13 +1058,13 @@ const finalizeTest = useCallback(
         console.error('Fetch error:', fetchError)
         setError('Technical error loading question.')
       } else if (!data) {
-        finalizeTest(stats.currentLevel, stats.totalAnswered, fullHistory)
+        await finalizeTest(level, currentTotalAnswered, historyEntries)
       } else {
         setCurrentQuestion(data as Question)
       }
       setLoading(false)
     },
-    [supabase, finalizeTest, stats.currentLevel, stats.totalAnswered, fullHistory],
+    [supabase, finalizeTest],
   )
 
   useEffect(() => {
@@ -1044,23 +1111,21 @@ const finalizeTest = useCallback(
 
     const total = stats.totalAnswered + 1
 
-    // 1. ABSOLUTE MAXIMUM CIRCUIT BREAKER
     if (total >= strategy.maxQuestions) {
       await finalizeTest(stats.currentLevel, total, updatedFullHistory)
       return
     }
 
-    // 2. RUN EMBEDDED STRATEGY CRITERIA
     const newLevelHistory = [...currentLevelHistory, isCorrect]
     let nextLevel = stats.currentLevel
     let levelChanged = false
     let updatedFloor = highestPassedLevel
 
     if (strategy.shouldMoveUp(newLevelHistory)) {
-      const currentIdx = CEFR_LEVELS.findIndex(
+      const currentIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
       )
-      const prevFloorIdx = CEFR_LEVELS.findIndex(
+      const prevFloorIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
       )
 
@@ -1080,7 +1145,6 @@ const finalizeTest = useCallback(
       levelChanged = nextLevel !== stats.currentLevel
     }
 
-    // Sync state updates
     setStats((prev) => ({
       ...prev,
       currentLevel: nextLevel,
@@ -1089,7 +1153,6 @@ const finalizeTest = useCallback(
 
     setCurrentLevelHistory(levelChanged ? [] : newLevelHistory)
 
-    // Intermediate Background Save (Every 5 questions)
     if (total % 5 === 0) {
       updateTestResult(
         initialSession.sessionId,
@@ -1099,64 +1162,132 @@ const finalizeTest = useCallback(
       )
     }
 
-    fetchQuestion(initialSession.testType, nextLevel, updatedUsedIds)
+    fetchQuestion(
+      initialSession.testType,
+      nextLevel,
+      updatedUsedIds,
+      total,
+      updatedFullHistory,
+    )
   }
 
-  // --- UI RENDERING BELOW ---
+  if (stats.isFinished) {
+    return (
+      // <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
+      //   <h2 className='text-3xl font-bold'>Test Complete!</h2>
 
-if (stats.isFinished) {
-  return (
-    <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
-      <h2 className='text-3xl font-bold'>Test Complete!</h2>
+      //   <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
+      //     <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
+      //       DEV MODE: Estimated Level
+      //     </p>
+      //     <span className='text-6xl font-black'>{stats.currentLevel}</span>
+      //   </div>
 
-      <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
-        <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
-          DEV MODE: Estimated Level
-        </p>
-        <span className='text-6xl font-black'>{stats.currentLevel}</span>
+      //   {recommendedBooks.length > 0 && (
+      //     <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
+      //       <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
+      //         Recommended Coursebooks ({initialSession.testType})
+      //       </h3>
+      //       <ul className='space-y-2.5'>
+      //         {recommendedBooks.map((book) => (
+      //           <li
+      //             key={book.id}
+      //             className='flex items-center justify-between text-zinc-800 font-medium text-sm'
+      //           >
+      //             <div className='flex items-center gap-2'>
+      //               <span className='text-amber-500'>📖</span>
+      //               <span>{book.name}</span>
+      //             </div>
+      //             {book.inlingua_level !== null && (
+      //               <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
+      //                 Level {book.inlingua_level}
+      //               </span>
+      //             )}
+      //           </li>
+      //         ))}
+      //       </ul>
+      //     </div>
+      //   )}
+
+      //   <p className='text-zinc-500 text-sm text-balance'>
+      //     Your results have been recorded. Our team will review your score shortly.
+      //   </p>
+
+      //   <Button
+      //     size='lg'
+      //     className='w-full'
+      //     onClick={() => (window.location.href = '/')}
+      //   >
+      //     Finish
+      //   </Button>
+      // </div>
+      <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
+  <h2 className='text-3xl font-bold'>Test Complete!</h2>
+
+  {/* Compacted Dev Badge Box */}
+  <div className='py-2.5 px-4 bg-amber-50 text-amber-900 rounded-xl w-full border border-amber-200/60 shadow-xs flex items-center justify-between'>
+    <span className='text-[11px] uppercase tracking-wider font-bold text-amber-700'>
+      DEV MODE: Estimated Level
+    </span>
+    <span className='text-xl font-black bg-amber-200/80 px-3 py-0.5 rounded-md text-amber-950 font-mono'>
+      {stats.currentLevel}
+    </span>
+  </div>
+
+  {/* Prominent Recommended Coursebooks Section */}
+  {recommendedBooks.length > 0 && (
+    <div className='rounded-2xl border border-zinc-200 bg-white text-left shadow-md overflow-hidden transition-all'>
+      <div className='bg-zinc-900 px-6 py-3.5 flex items-center justify-between'>
+        <h3 className='text-xs font-bold uppercase tracking-widest text-zinc-200 flex items-center gap-2'>
+          <span>📚</span>
+          <span>Recommended Coursebook{recommendedBooks.length > 1 ? 's' : ''}</span>
+        </h3>
+        <span className='text-[10px] uppercase font-semibold text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700/50'>
+          {initialSession.testType}
+        </span>
       </div>
 
-      {/* Dynamic Database Books Section */}
-      {recommendedBooks.length > 0 && (
-        <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
-          <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
-            Recommended Coursebooks ({initialSession.testType})
-          </h3>
-          <ul className='space-y-2.5'>
-            {recommendedBooks.map((book) => (
-              <li
-                key={book.id}
-                className='flex items-center justify-between text-zinc-800 font-medium text-sm'
-              >
-                <div className='flex items-center gap-2'>
-                  <span className='text-amber-500'>📖</span>
-                  <span>{book.name}</span>
+      <div className='p-6'>
+        <ul className='divide-y divide-zinc-100'>
+          {recommendedBooks.map((book) => (
+            <li
+              key={book.id}
+              className='py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-3'
+            >
+              <div className='flex items-center gap-3 min-w-0'>
+                <div className='w-8 h-8 rounded-lg bg-amber-50 border border-amber-200/50 flex items-center justify-center shrink-0 text-amber-600 text-sm'>
+                  📖
                 </div>
-                {book.inlingua_level !== null && (
-                  <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
-                    Level {book.inlingua_level}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <p className='text-zinc-500 text-sm text-balance'>
-        Your results have been recorded. Our team will review your score shortly.
-      </p>
-
-      <Button
-        size='lg'
-        className='w-full'
-        onClick={() => (window.location.href = '/')}
-      >
-        Finish
-      </Button>
+                <span className='text-zinc-900 font-semibold text-base truncate'>
+                  {book.name}
+                </span>
+              </div>
+              {book.inlingua_level !== null && (
+                <span className='shrink-0 text-xs bg-amber-100 text-amber-800 font-semibold px-2.5 py-1 rounded-md border border-amber-200/60 font-mono'>
+                  Level {book.inlingua_level}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
-  )
-}
+  )}
+
+  <p className='text-zinc-500 text-sm text-balance'>
+    Your results have been recorded. Our team will review your score shortly.
+  </p>
+
+  <Button
+    size='lg'
+    className='w-full text-base font-semibold py-6 shadow-sm'
+    onClick={() => (window.location.href = '/')}
+  >
+    Finish
+  </Button>
+</div>
+    )
+  }
 
   if (error) {
     return (
@@ -1254,64 +1385,18 @@ if (stats.isFinished) {
                     if (!audioUrl) return null
 
                     return (
-                      <div
+                      <ImageListenOptionCard
                         key={`${currentQuestion.id}-${letter}`}
-                        className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'
-                      >
-                        <div className='flex items-center justify-center w-full'>
-                          <audio
-                            id={`opt-audio-${letter}`}
-                            src={audioUrl}
-                            onPlay={() => setMediaPlaying(true)}
-                            onEnded={() => setMediaPlaying(false)}
-                            onPause={() => setMediaPlaying(false)}
-                          />
-                          <button
-                            type='button'
-                            disabled={mediaPlaying}
-                            className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
-                            onClick={() => {
-                              if (mediaPlaying) return
-                              const el = document.getElementById(
-                                `opt-audio-${letter}`,
-                              ) as HTMLAudioElement
-                              el?.play()
-                            }}
-                          >
-                            <svg
-                              className='w-7 h-7 text-white fill-current ml-1'
-                              viewBox='0 0 24 24'
-                            >
-                              <path d='M8 5v14l11-7z' />
-                            </svg>
-                          </button>
-                        </div>
-
-                        <button
-                          type='button'
-                          className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
-                          onClick={() =>
-                            handleAnswer(
-                              letter === currentQuestion.correct_answer,
-                            )
-                          }
-                        >
-                          <svg
-                            style={{ width: '60px', height: '60px' }}
-                            className='shrink-0 transition-transform group-hover:scale-110'
-                            fill='none'
-                            stroke='currentColor'
-                            strokeWidth={3.5}
-                            viewBox='0 0 24 24'
-                          >
-                            <path
-                              strokeLinecap='round'
-                              strokeLinejoin='round'
-                              d='M5 13l4 4L19 7'
-                            />
-                          </svg>
-                        </button>
-                      </div>
+                        letter={letter}
+                        audioUrl={audioUrl}
+                        mediaPlaying={mediaPlaying}
+                        setMediaPlaying={setMediaPlaying}
+                        onSelectOption={() =>
+                          handleAnswer(
+                            letter === currentQuestion.correct_answer,
+                          )
+                        }
+                      />
                     )
                   })}
                 </div>
@@ -1358,24 +1443,29 @@ if (stats.isFinished) {
             <div className='grid gap-4'>
               {currentQuestion.q_type === 'listen_choose' ? (
                 <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-                  {['a', 'b', 'c'].map((letter) => (
-                    <button
-                      key={`${currentQuestion.id}-${letter}`}
-                      onClick={() =>
-                        handleAnswer(letter === currentQuestion.correct_answer)
-                      }
-                      className='group relative aspect-square overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-zinc-900 hover:shadow-md active:scale-95'
-                    >
-                      <img
-                        src={currentQuestion.options[letter]}
-                        alt={`Option ${letter}`}
-                        className='h-full w-full object-contain'
-                      />
-                      <div className='absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold uppercase text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors'>
-                        {letter}
-                      </div>
-                    </button>
-                  ))}
+                  {['a', 'b', 'c'].map((letter) => {
+                    const imageUrl = currentQuestion.options?.[letter]
+                    if (!imageUrl) return null
+
+                    return (
+                      <button
+                        key={`${currentQuestion.id}-${letter}`}
+                        onClick={() =>
+                          handleAnswer(letter === currentQuestion.correct_answer)
+                        }
+                        className='group relative aspect-square overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-zinc-900 hover:shadow-md active:scale-95'
+                      >
+                        <img
+                          src={imageUrl}
+                          alt={`Option ${letter}`}
+                          className='h-full w-full object-contain'
+                        />
+                        <div className='absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold uppercase text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors'>
+                          {letter}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               ) : currentQuestion.q_type === 'image_listen_choose' ? null : (
                 <div
@@ -1434,7 +1524,75 @@ if (stats.isFinished) {
   )
 }
 
-// --- SUB-COMPONENTS FOR MEDIA PLAYERS ---
+// --- SUB-COMPONENTS ---
+
+interface ImageListenOptionProps {
+  letter: string
+  audioUrl: string
+  mediaPlaying: boolean
+  setMediaPlaying: (playing: boolean) => void
+  onSelectOption: () => void
+}
+
+function ImageListenOptionCard({
+  audioUrl,
+  mediaPlaying,
+  setMediaPlaying,
+  onSelectOption,
+}: ImageListenOptionProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  return (
+    <div className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'>
+      <div className='flex items-center justify-center w-full'>
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          onPlay={() => setMediaPlaying(true)}
+          onEnded={() => setMediaPlaying(false)}
+          onPause={() => setMediaPlaying(false)}
+        />
+        <button
+          type='button'
+          disabled={mediaPlaying}
+          className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
+          onClick={() => {
+            if (mediaPlaying || !audioRef.current) return
+            audioRef.current.play()
+          }}
+        >
+          <svg
+            className='w-7 h-7 text-white fill-current ml-1'
+            viewBox='0 0 24 24'
+          >
+            <path d='M8 5v14l11-7z' />
+          </svg>
+        </button>
+      </div>
+
+      <button
+        type='button'
+        className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
+        onClick={onSelectOption}
+      >
+        <svg
+          style={{ width: '60px', height: '60px' }}
+          className='shrink-0 transition-transform group-hover:scale-110'
+          fill='none'
+          stroke='currentColor'
+          strokeWidth={3.5}
+          viewBox='0 0 24 24'
+        >
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M5 13l4 4L19 7'
+          />
+        </svg>
+      </button>
+    </div>
+  )
+}
 
 interface MediaProps {
   questionId: string
@@ -1453,35 +1611,33 @@ function AudioPlayerCard({
   setPlayedMediaIds,
 }: MediaProps & { audioUrl: string }) {
   const isPlayed = playedMediaIds.includes(questionId)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   return (
     <div className='bg-zinc-50 p-8 rounded-2xl border mb-6 max-w-xl mx-auto w-full text-center space-y-4 shadow-sm'>
       <audio
-        id={`audio-${questionId}`}
+        ref={audioRef}
         key={audioUrl}
+        src={audioUrl}
         onEnded={() => {
           setMediaPlaying(false)
           setPlayedMediaIds((prev) => [...prev, questionId])
         }}
-      >
-        <source src={audioUrl} type='audio/mpeg' />
-      </audio>
+      />
 
       <div className='flex justify-center items-center py-2'>
         <button
           disabled={mediaPlaying || isPlayed}
-          className={`relative flex items-center justify-center w-20 h-20 rounded-full transition-all duration-300 shadow-md ${isPlayed
+          className={`relative flex items-center justify-center w-20 h-20 rounded-full transition-all duration-300 shadow-md ${
+            isPlayed
               ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none'
               : mediaPlaying
                 ? 'bg-amber-500 text-white cursor-default scale-95'
                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
-            }`}
+          }`}
           onClick={() => {
-            const audioEl = document.getElementById(
-              `audio-${questionId}`,
-            ) as HTMLAudioElement
-            if (audioEl) {
-              audioEl.play()
+            if (audioRef.current) {
+              audioRef.current.play()
               setMediaPlaying(true)
             }
           }}
@@ -1553,11 +1709,12 @@ function VideoPlayerCard({
   setPlayedMediaIds,
 }: MediaProps & { videoUrl: string }) {
   const isPlayed = playedMediaIds.includes(questionId)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   return (
     <div className='bg-zinc-950 rounded-2xl border shadow-md max-w-2xl mx-auto w-full overflow-hidden mb-6 relative group aspect-video'>
       <video
-        id={`video-${questionId}`}
+        ref={videoRef}
         key={videoUrl}
         playsInline
         className='w-full h-full object-contain mx-auto bg-black'
@@ -1573,16 +1730,14 @@ function VideoPlayerCard({
         <div className='absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center p-4 transition-all'>
           <button
             disabled={isPlayed}
-            className={`flex items-center justify-center w-20 h-20 rounded-full transition-all duration-300 shadow-xl ${isPlayed
+            className={`flex items-center justify-center w-20 h-20 rounded-full transition-all duration-300 shadow-xl ${
+              isPlayed
                 ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'
                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
-              }`}
+            }`}
             onClick={() => {
-              const videoEl = document.getElementById(
-                `video-${questionId}`,
-              ) as HTMLVideoElement
-              if (videoEl) {
-                videoEl.play()
+              if (videoRef.current) {
+                videoRef.current.play()
                 setMediaPlaying(true)
               }
             }}
