@@ -380,8 +380,8 @@ export default function AdaptiveTestController({
                   </div>
                 )}
 
-                {/* 3 Audio Player Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* 3 Columns: Audio Player + Check Mark Button directly underneath */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   {['a', 'b', 'c'].map((letter) => {
                     const audioUrl = currentQuestion.options?.[letter]
                     if (!audioUrl) return null
@@ -389,21 +389,61 @@ export default function AdaptiveTestController({
                     return (
                       <div
                         key={`${currentQuestion.id}-${letter}`}
-                        className="flex items-center justify-center p-4 border rounded-2xl bg-zinc-50 shadow-sm"
+                        className="flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm"
                       >
-                        <audio id={`opt-audio-${letter}`} src={audioUrl} />
+                        {/* Audio Player Card */}
+                        <div className="flex items-center justify-center w-full">
+                          <audio
+                            id={`opt-audio-${letter}`}
+                            src={audioUrl}
+                            onPlay={() => setMediaPlaying(true)}
+                            onEnded={() => setMediaPlaying(false)}
+                            onPause={() => setMediaPlaying(false)}
+                          />
+                          <button
+                            type="button"
+                            disabled={mediaPlaying}
+                            className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            onClick={() => {
+                              if (mediaPlaying) return
+
+                              const el = document.getElementById(
+                                `opt-audio-${letter}`
+                              ) as HTMLAudioElement
+                              el?.play()
+                            }}
+                          >
+                            <svg
+                              className="w-7 h-7 text-white fill-current ml-1"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Selection Checkmark Button */}
                         <button
                           type="button"
-                          className="flex items-center gap-2 px-5 py-3 rounded-full bg-white border border-zinc-200 shadow-sm hover:bg-amber-50 hover:border-amber-300 text-zinc-700 font-medium transition-all active:scale-95"
-                          onClick={() => {
-                            const el = document.getElementById(
-                              `opt-audio-${letter}`,
-                            ) as HTMLAudioElement
-                            el?.play()
-                          }}
+                          className="w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden"
+                          onClick={() =>
+                            handleAnswer(letter === currentQuestion.correct_answer)
+                          }
                         >
-                          <span className="text-xl">🔊</span>
-                          <span className="text-sm font-semibold uppercase">Listen to {letter}</span>
+                          <svg
+                            style={{ width: '60px', height: '60px' }}
+                            className="shrink-0 transition-transform group-hover:scale-110"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={3.5}
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
                         </button>
                       </div>
                     )
@@ -411,6 +451,7 @@ export default function AdaptiveTestController({
                 </div>
               </div>
             )}
+
             {currentQuestion.q_type === 'image_context' &&
               currentQuestion.image_url && (
                 <div className='rounded-xl overflow-hidden border bg-white mb-4'>
@@ -626,22 +667,7 @@ export default function AdaptiveTestController({
                     </button>
                   ))}
                 </div>
-              ) : currentQuestion.q_type === 'image_listen_choose' ? (
-                <div className='grid grid-cols-3 gap-4 max-w-md mx-auto w-full pt-2'>
-                  {['a', 'b', 'c'].map((letter) => (
-                    <Button
-                      key={`${currentQuestion.id}-${letter}`}
-                      variant='outline'
-                      className='h-14 rounded-xl border-2 border-zinc-200 text-lg font-bold uppercase hover:bg-zinc-900 hover:text-white hover:border-zinc-900 transition-all'
-                      onClick={() =>
-                        handleAnswer(letter === currentQuestion.correct_answer)
-                      }
-                    >
-                      Select {letter}
-                    </Button>
-                  ))}
-                </div>
-              ) : (
+              ) : currentQuestion.q_type === 'image_listen_choose' ? null : (
                 <div
                   className={
                     currentQuestion.q_type === 'dialogue'
