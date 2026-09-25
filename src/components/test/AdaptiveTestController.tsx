@@ -1,5 +1,4 @@
-
-// // src/components/test/AdaptiveTestController.tsx
+// // src\components\test\AdaptiveTestController.tsx
 
 // 'use client'
 
@@ -66,7 +65,8 @@
 //   initialSession,
 //   strategyName = 'SIX_QUESTION_DYNAMIC',
 // }: Props) {
-//   const supabase = createClient()
+//   // Memoize client to prevent recreation on every render pass
+//   const supabase = useMemo(() => createClient(), [])
 //   const hasInitialized = useRef(false)
 
 //   const strategy = useMemo(
@@ -88,7 +88,6 @@
 //     { id: string; name: string; inlingua_level: number | null }[]
 //   >([])
 
-//   // Highest level successfully passed floor tracker
 //   const [highestPassedLevel, setHighestPassedLevel] = useState<string | null>(
 //     null,
 //   )
@@ -99,7 +98,6 @@
 //     isFinished: false,
 //   })
 
-//   // Helper function to calculate level changes without relying on stale closures
 //   const calculateNextLevel = useCallback(
 //     (
 //       current: string,
@@ -112,7 +110,9 @@
 //       if (idx === -1) return current
 
 //       if (direction === 'up') {
-//         return idx < CEFR_LEVELS.length - 1 ? CEFR_LEVELS[idx + 1] : CEFR_LEVELS[idx]
+//         return idx < CEFR_LEVELS.length - 1
+//           ? CEFR_LEVELS[idx + 1]
+//           : CEFR_LEVELS[idx]
 //       }
 
 //       if (direction === 'down') {
@@ -144,19 +144,6 @@
 //     async (finalLevel: string, total: number, history: HistoryEntry[]) => {
 //       stopAllMedia()
 //       setIsSaving(true)
-
-//       // Fetch matching books for the achieved CEFR level and test stream
-//       const { data: booksData } = await supabase
-//         .from('books')
-//         .select('id, name, inlingua_level')
-//         .eq('cefr_level', finalLevel)
-//         .eq('test_identity', initialSession.testType)
-//         .order('inlingua_level', { ascending: true })
-
-//       if (booksData) {
-//         setRecommendedBooks(booksData)
-//       }
-
 //       await updateTestResult(
 //         initialSession.sessionId,
 //         finalLevel,
@@ -175,7 +162,7 @@
 //     [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
 //   )
 
-// const fetchQuestion = useCallback(
+//   const fetchQuestion = useCallback(
 //     async (testType: string, level: string, excludeIds: string[]) => {
 //       setLoading(true)
 //       setError(null)
@@ -200,37 +187,13 @@
 //         setError('Technical error loading question.')
 //         setLoading(false)
 //       } else if (!data) {
-//         // POOL EXHAUSTION FALLBACK:
-//         // Instead of ending the test, attempt to escalate to the next level up
-//         const nextLevelUp = calculateNextLevel(level, 'up', highestPassedLevel)
-
-//         if (nextLevelUp !== level) {
-//           console.warn(`[fetchQuestion] No unused questions left for level "${level}". Escalating to "${nextLevelUp}"...`)
-          
-//           setStats((prev) => ({ ...prev, currentLevel: nextLevelUp }))
-//           setCurrentLevelHistory([])
-          
-//           // Recursively fetch for the next level up
-//           fetchQuestion(testType, nextLevelUp, excludeIds)
-//         } else {
-//           // Absolute ceiling reached with no questions remaining
-//           console.log(`[fetchQuestion] Reached end of question bank at top level "${level}". Finalizing test.`)
-//           finalizeTest(highestPassedLevel || stats.currentLevel, stats.totalAnswered, fullHistory)
-//         }
+//         finalizeTest(stats.currentLevel, stats.totalAnswered, fullHistory)
 //       } else {
 //         setCurrentQuestion(data as Question)
 //         setLoading(false)
 //       }
 //     },
-//     [
-//       supabase,
-//       finalizeTest,
-//       stats.currentLevel,
-//       stats.totalAnswered,
-//       fullHistory,
-//       calculateNextLevel,
-//       highestPassedLevel,
-//     ],
+//     [supabase, finalizeTest, stats.currentLevel, stats.totalAnswered, fullHistory],
 //   )
 
 //   useEffect(() => {
@@ -277,13 +240,11 @@
 
 //     const total = stats.totalAnswered + 1
 
-//     // 1. ABSOLUTE MAXIMUM CIRCUIT BREAKER
 //     if (total >= strategy.maxQuestions) {
 //       await finalizeTest(stats.currentLevel, total, updatedFullHistory)
 //       return
 //     }
 
-//     // 2. RUN EMBEDDED STRATEGY CRITERIA
 //     const newLevelHistory = [...currentLevelHistory, isCorrect]
 //     let nextLevel = stats.currentLevel
 //     let levelChanged = false
@@ -313,7 +274,6 @@
 //       levelChanged = nextLevel !== stats.currentLevel
 //     }
 
-//     // Sync state updates
 //     setStats((prev) => ({
 //       ...prev,
 //       currentLevel: nextLevel,
@@ -322,7 +282,6 @@
 
 //     setCurrentLevelHistory(levelChanged ? [] : newLevelHistory)
 
-//     // Intermediate Background Save (Every 5 questions)
 //     if (total % 5 === 0) {
 //       updateTestResult(
 //         initialSession.sessionId,
@@ -332,10 +291,14 @@
 //       )
 //     }
 
-//     fetchQuestion(initialSession.testType, nextLevel, updatedUsedIds)
+//     fetchQuestion(
+//       initialSession.testType,
+//       nextLevel,
+//       updatedUsedIds,
+//       total,
+//       updatedFullHistory,
+//     )
 //   }
-
-//   // --- UI RENDERING BELOW ---
 
 //   if (stats.isFinished) {
 //     return (
@@ -348,36 +311,9 @@
 //           </p>
 //           <span className='text-6xl font-black'>{stats.currentLevel}</span>
 //         </div>
-
-//         {/* Dynamic Database Books Section */}
-//         {recommendedBooks.length > 0 && (
-//           <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
-//             <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
-//               Recommended Coursebooks ({initialSession.testType})
-//             </h3>
-//             <ul className='space-y-2.5'>
-//               {recommendedBooks.map((book) => (
-//                 <li
-//                   key={book.id}
-//                   className='flex items-center justify-between text-zinc-800 font-medium text-sm'
-//                 >
-//                   <div className='flex items-center gap-2'>
-//                     <span className='text-amber-500'>📖</span>
-//                     <span>{book.name}</span>
-//                   </div>
-//                   {book.inlingua_level !== null && (
-//                     <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
-//                       Level {book.inlingua_level}
-//                     </span>
-//                   )}
-//                 </li>
-//               ))}
-//             </ul>
-//           </div>
-//         )}
-
-//         <p className='text-zinc-500 text-sm text-balance'>
-//           Your results have been recorded. Our team will review your score shortly.
+//         <p className='text-zinc-500 max-w-xs mx-auto text-balance'>
+//           Your results have been recorded. Our team will review your score
+//           shortly.
 //         </p>
 
 //         <Button
@@ -487,64 +423,18 @@
 //                     if (!audioUrl) return null
 
 //                     return (
-//                       <div
+//                       <ImageListenOptionCard
 //                         key={`${currentQuestion.id}-${letter}`}
-//                         className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'
-//                       >
-//                         <div className='flex items-center justify-center w-full'>
-//                           <audio
-//                             id={`opt-audio-${letter}`}
-//                             src={audioUrl}
-//                             onPlay={() => setMediaPlaying(true)}
-//                             onEnded={() => setMediaPlaying(false)}
-//                             onPause={() => setMediaPlaying(false)}
-//                           />
-//                           <button
-//                             type='button'
-//                             disabled={mediaPlaying}
-//                             className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
-//                             onClick={() => {
-//                               if (mediaPlaying) return
-//                               const el = document.getElementById(
-//                                 `opt-audio-${letter}`,
-//                               ) as HTMLAudioElement
-//                               el?.play()
-//                             }}
-//                           >
-//                             <svg
-//                               className='w-7 h-7 text-white fill-current ml-1'
-//                               viewBox='0 0 24 24'
-//                             >
-//                               <path d='M8 5v14l11-7z' />
-//                             </svg>
-//                           </button>
-//                         </div>
-
-//                         <button
-//                           type='button'
-//                           className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
-//                           onClick={() =>
-//                             handleAnswer(
-//                               letter === currentQuestion.correct_answer,
-//                             )
-//                           }
-//                         >
-//                           <svg
-//                             style={{ width: '60px', height: '60px' }}
-//                             className='shrink-0 transition-transform group-hover:scale-110'
-//                             fill='none'
-//                             stroke='currentColor'
-//                             strokeWidth={3.5}
-//                             viewBox='0 0 24 24'
-//                           >
-//                             <path
-//                               strokeLinecap='round'
-//                               strokeLinejoin='round'
-//                               d='M5 13l4 4L19 7'
-//                             />
-//                           </svg>
-//                         </button>
-//                       </div>
+//                         letter={letter}
+//                         audioUrl={audioUrl}
+//                         mediaPlaying={mediaPlaying}
+//                         setMediaPlaying={setMediaPlaying}
+//                         onSelectOption={() =>
+//                           handleAnswer(
+//                             letter === currentQuestion.correct_answer,
+//                           )
+//                         }
+//                       />
 //                     )
 //                   })}
 //                 </div>
@@ -667,7 +557,76 @@
 //   )
 // }
 
-// // --- SUB-COMPONENTS FOR MEDIA PLAYERS ---
+// // --- SUB-COMPONENTS ---
+
+// interface ImageListenOptionProps {
+//   letter: string
+//   audioUrl: string
+//   mediaPlaying: boolean
+//   setMediaPlaying: (playing: boolean) => void
+//   onSelectOption: () => void
+// }
+
+// function ImageListenOptionCard({
+//   letter,
+//   audioUrl,
+//   mediaPlaying,
+//   setMediaPlaying,
+//   onSelectOption,
+// }: ImageListenOptionProps) {
+//   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+//   return (
+//     <div className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'>
+//       <div className='flex items-center justify-center w-full'>
+//         <audio
+//           ref={audioRef}
+//           src={audioUrl}
+//           onPlay={() => setMediaPlaying(true)}
+//           onEnded={() => setMediaPlaying(false)}
+//           onPause={() => setMediaPlaying(false)}
+//         />
+//         <button
+//           type='button'
+//           disabled={mediaPlaying}
+//           className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
+//           onClick={() => {
+//             if (mediaPlaying || !audioRef.current) return
+//             audioRef.current.play()
+//           }}
+//         >
+//           <svg
+//             className='w-7 h-7 text-white fill-current ml-1'
+//             viewBox='0 0 24 24'
+//           >
+//             <path d='M8 5v14l11-7z' />
+//           </svg>
+//         </button>
+//       </div>
+
+//       <button
+//         type='button'
+//         className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
+//         onClick={onSelectOption}
+//       >
+//         <svg
+//           style={{ width: '60px', height: '60px' }}
+//           className='shrink-0 transition-transform group-hover:scale-110'
+//           fill='none'
+//           stroke='currentColor'
+//           strokeWidth={3.5}
+//           viewBox='0 0 24 24'
+//         >
+//           <path
+//             strokeLinecap='round'
+//             strokeLinejoin='round'
+//             d='M5 13l4 4L19 7'
+//           />
+//         </svg>
+//       </button>
+//     </div>
+//   )
+// }
 
 // interface MediaProps {
 //   questionId: string
@@ -686,19 +645,19 @@
 //   setPlayedMediaIds,
 // }: MediaProps & { audioUrl: string }) {
 //   const isPlayed = playedMediaIds.includes(questionId)
+//   const audioRef = useRef<HTMLAudioElement | null>(null)
 
 //   return (
 //     <div className='bg-zinc-50 p-8 rounded-2xl border mb-6 max-w-xl mx-auto w-full text-center space-y-4 shadow-sm'>
 //       <audio
-//         id={`audio-${questionId}`}
+//         ref={audioRef}
 //         key={audioUrl}
+//         src={audioUrl}
 //         onEnded={() => {
 //           setMediaPlaying(false)
 //           setPlayedMediaIds((prev) => [...prev, questionId])
 //         }}
-//       >
-//         <source src={audioUrl} type='audio/mpeg' />
-//       </audio>
+//       />
 
 //       <div className='flex justify-center items-center py-2'>
 //         <button
@@ -711,11 +670,8 @@
 //                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
 //           }`}
 //           onClick={() => {
-//             const audioEl = document.getElementById(
-//               `audio-${questionId}`,
-//             ) as HTMLAudioElement
-//             if (audioEl) {
-//               audioEl.play()
+//             if (audioRef.current) {
+//               audioRef.current.play()
 //               setMediaPlaying(true)
 //             }
 //           }}
@@ -787,11 +743,12 @@
 //   setPlayedMediaIds,
 // }: MediaProps & { videoUrl: string }) {
 //   const isPlayed = playedMediaIds.includes(questionId)
+//   const videoRef = useRef<HTMLVideoElement | null>(null)
 
 //   return (
 //     <div className='bg-zinc-950 rounded-2xl border shadow-md max-w-2xl mx-auto w-full overflow-hidden mb-6 relative group aspect-video'>
 //       <video
-//         id={`video-${questionId}`}
+//         ref={videoRef}
 //         key={videoUrl}
 //         playsInline
 //         className='w-full h-full object-contain mx-auto bg-black'
@@ -813,11 +770,8 @@
 //                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
 //             }`}
 //             onClick={() => {
-//               const videoEl = document.getElementById(
-//                 `video-${questionId}`,
-//               ) as HTMLVideoElement
-//               if (videoEl) {
-//                 videoEl.play()
+//               if (videoRef.current) {
+//                 videoRef.current.play()
 //                 setMediaPlaying(true)
 //               }
 //             }}
@@ -875,6 +829,7 @@ import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
 import { TEST_STRATEGIES } from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
+import { getLevelsForTestType } from '@/types/level-config'
 
 interface Question {
   id: string
@@ -915,25 +870,18 @@ interface Props {
   strategyName?: StrategyName
 }
 
-const CEFR_LEVELS = [
-  'Pre-A1',
-  'A1',
-  'A1+',
-  'A2',
-  'A2+',
-  'B1',
-  'B1+',
-  'B2',
-  'C1',
-  'C2',
-]
-
 export default function AdaptiveTestController({
   initialSession,
   strategyName = 'SIX_QUESTION_DYNAMIC',
 }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const hasInitialized = useRef(false)
+
+  // Retrieve category-specific level ladder (e.g. ['Pre-A1', 'A1', 'A1+'] for Prathom)
+  const categoryLevels = useMemo(
+    () => getLevelsForTestType(initialSession.testType),
+    [initialSession.testType],
+  )
 
   const strategy = useMemo(
     () =>
@@ -954,7 +902,6 @@ export default function AdaptiveTestController({
     { id: string; name: string; inlingua_level: number | null }[]
   >([])
 
-  // Highest level successfully passed floor tracker
   const [highestPassedLevel, setHighestPassedLevel] = useState<string | null>(
     null,
   )
@@ -965,35 +912,36 @@ export default function AdaptiveTestController({
     isFinished: false,
   })
 
-  // Helper function to calculate level changes without relying on stale closures
   const calculateNextLevel = useCallback(
     (
       current: string,
       direction: 'up' | 'down',
       floorLevel: string | null,
     ): string => {
-      const idx = CEFR_LEVELS.findIndex(
+      const idx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === current.toLowerCase(),
       )
       if (idx === -1) return current
 
       if (direction === 'up') {
-        return idx < CEFR_LEVELS.length - 1 ? CEFR_LEVELS[idx + 1] : CEFR_LEVELS[idx]
+        return idx < categoryLevels.length - 1
+          ? categoryLevels[idx + 1]
+          : categoryLevels[idx]
       }
 
       if (direction === 'down') {
         if (floorLevel) {
-          const floorIdx = CEFR_LEVELS.findIndex(
+          const floorIdx = categoryLevels.findIndex(
             (l) => l.toLowerCase() === floorLevel.toLowerCase(),
           )
-          if (idx <= floorIdx) return CEFR_LEVELS[idx]
+          if (idx <= floorIdx) return categoryLevels[idx]
         }
-        return idx > 0 ? CEFR_LEVELS[idx - 1] : CEFR_LEVELS[idx]
+        return idx > 0 ? categoryLevels[idx - 1] : categoryLevels[idx]
       }
 
       return current
     },
-    [],
+    [categoryLevels],
   )
 
   const stopAllMedia = useCallback(() => {
@@ -1011,37 +959,44 @@ export default function AdaptiveTestController({
       stopAllMedia()
       setIsSaving(true)
 
-      // Let updateTestResult in actions.ts handle exact database book matching
-      const result = await updateTestResult(
-        initialSession.sessionId,
-        finalLevel,
-        true,
-        history,
-      )
+    // Fetch matching books for the achieved CEFR level and test stream
+    const { data: booksData } = await supabase
+      .from('books') // <-- Replace with your actual table name if different
+      .select('id, name, inlingua_level')
+      .eq('cefr_level', finalLevel)
+      .eq('test_identity', initialSession.testType)
+      .order('inlingua_level', { ascending: true })
 
-      if (result.success && result.recommendedBooks) {
-        setRecommendedBooks(
-          result.recommendedBooks.map((name, i) => ({
-            id: String(i),
-            name,
-            inlingua_level: null,
-          })),
-        )
-      }
+    if (booksData) {
+      setRecommendedBooks(booksData)
+    }
 
-      setStats((prev) => ({
-        ...prev,
-        isFinished: true,
-        totalAnswered: total,
-        currentLevel: finalLevel,
-      }))
-      setIsSaving(false)
-    },
-    [initialSession.sessionId, stopAllMedia],
-  )
+    await updateTestResult(
+      initialSession.sessionId,
+      finalLevel,
+      true,
+      history,
+    )
+
+    setStats((prev) => ({
+      ...prev,
+      isFinished: true,
+      totalAnswered: total,
+      currentLevel: finalLevel,
+    }))
+    setIsSaving(false)
+  },
+  [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
+)
 
   const fetchQuestion = useCallback(
-    async (testType: string, level: string, excludeIds: string[]) => {
+    async (
+      testType: string,
+      level: string,
+      excludeIds: string[],
+      currentTotalAnswered: number,
+      historyEntries: HistoryEntry[],
+    ) => {
       setLoading(true)
       setError(null)
 
@@ -1065,42 +1020,13 @@ export default function AdaptiveTestController({
         setError('Technical error loading question.')
         setLoading(false)
       } else if (!data) {
-        // POOL EXHAUSTION FALLBACK:
-        // Attempt to escalate to next level up instead of terminating
-        const nextLevelUp = calculateNextLevel(level, 'up', highestPassedLevel)
-
-        if (nextLevelUp !== level) {
-          console.warn(
-            `[fetchQuestion] No unused questions left for level "${level}". Escalating to "${nextLevelUp}"...`,
-          )
-
-          setStats((prev) => ({ ...prev, currentLevel: nextLevelUp }))
-          setCurrentLevelHistory([])
-
-          setTimeout(() => {
-            fetchQuestion(testType, nextLevelUp, excludeIds)
-          }, 0)
-        } else {
-          // Absolute ceiling reached with no questions remaining
-          const awardLevel = highestPassedLevel || level
-          console.log(
-            `[fetchQuestion] Reached end of question bank. Finalizing test with level "${awardLevel}".`,
-          )
-          finalizeTest(awardLevel, stats.totalAnswered, fullHistory)
-        }
+        finalizeTest(stats.currentLevel, stats.totalAnswered, fullHistory)
       } else {
         setCurrentQuestion(data as Question)
         setLoading(false)
       }
     },
-    [
-      supabase,
-      finalizeTest,
-      stats.totalAnswered,
-      fullHistory,
-      calculateNextLevel,
-      highestPassedLevel,
-    ],
+    [supabase, finalizeTest, stats.currentLevel, stats.totalAnswered, fullHistory],
   )
 
   useEffect(() => {
@@ -1147,23 +1073,21 @@ export default function AdaptiveTestController({
 
     const total = stats.totalAnswered + 1
 
-    // 1. ABSOLUTE MAXIMUM CIRCUIT BREAKER
     if (total >= strategy.maxQuestions) {
       const awardLevel = highestPassedLevel || stats.currentLevel
       await finalizeTest(awardLevel, total, updatedFullHistory)
       return
     }
 
-    // 2. RUN EMBEDDED STRATEGY CRITERIA
     const newLevelHistory = [...currentLevelHistory, isCorrect]
     let nextLevel = stats.currentLevel
     let updatedFloor = highestPassedLevel
 
     if (strategy.shouldMoveUp(newLevelHistory)) {
-      const currentIdx = CEFR_LEVELS.findIndex(
+      const currentIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
       )
-      const prevFloorIdx = CEFR_LEVELS.findIndex(
+      const prevFloorIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
       )
 
@@ -1208,14 +1132,12 @@ export default function AdaptiveTestController({
       setCurrentLevelHistory(newLevelHistory)
     }
 
-    // Sync state updates
     setStats((prev) => ({
       ...prev,
       currentLevel: nextLevel,
       totalAnswered: total,
     }))
 
-    // Intermediate Background Save (Every 5 questions)
     if (total % 5 === 0) {
       updateTestResult(
         initialSession.sessionId,
@@ -1225,64 +1147,68 @@ export default function AdaptiveTestController({
       )
     }
 
-    fetchQuestion(initialSession.testType, nextLevel, updatedUsedIds)
-  }
-
-  // --- UI RENDERING BELOW ---
-
-  if (stats.isFinished) {
-    return (
-      <div className="text-center space-y-6 py-10 max-w-md mx-auto">
-        <h2 className="text-3xl font-bold">Test Complete!</h2>
-
-        <div className="p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm">
-          <p className="text-xs uppercase tracking-widest font-bold text-amber-600 mb-1">
-            DEV MODE: Estimated Level
-          </p>
-          <span className="text-6xl font-black">{stats.currentLevel}</span>
-        </div>
-
-        {/* Dynamic Database Books Section */}
-        {recommendedBooks.length > 0 && (
-          <div className="p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-              Recommended Coursebooks ({initialSession.testType})
-            </h3>
-            <ul className="space-y-2.5">
-              {recommendedBooks.map((book) => (
-                <li
-                  key={book.id}
-                  className="flex items-center justify-between text-zinc-800 font-medium text-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-500">📖</span>
-                    <span>{book.name}</span>
-                  </div>
-                  {book.inlingua_level !== null && (
-                    <span className="text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono">
-                      Level {book.inlingua_level}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <p className="text-zinc-500 text-sm text-balance">
-          Your results have been recorded. Our team will review your score shortly.
-        </p>
-
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={() => (window.location.href = '/')}
-        >
-          Finish
-        </Button>
-      </div>
+    fetchQuestion(
+      initialSession.testType,
+      nextLevel,
+      updatedUsedIds,
+      total,
+      updatedFullHistory,
     )
   }
+
+if (stats.isFinished) {
+  return (
+    <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
+      <h2 className='text-3xl font-bold'>Test Complete!</h2>
+
+      <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
+        <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
+          DEV MODE: Estimated Level
+        </p>
+        <span className='text-6xl font-black'>{stats.currentLevel}</span>
+      </div>
+
+      {/* Dynamic Database Books Section */}
+      {recommendedBooks.length > 0 && (
+        <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
+          <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
+            Recommended Coursebooks ({initialSession.testType})
+          </h3>
+          <ul className='space-y-2.5'>
+            {recommendedBooks.map((book) => (
+              <li
+                key={book.id}
+                className='flex items-center justify-between text-zinc-800 font-medium text-sm'
+              >
+                <div className='flex items-center gap-2'>
+                  <span className='text-amber-500'>📖</span>
+                  <span>{book.name}</span>
+                </div>
+                {book.inlingua_level !== null && (
+                  <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
+                    Level {book.inlingua_level}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className='text-zinc-500 text-sm text-balance'>
+        Your results have been recorded. Our team will review your score shortly.
+      </p>
+
+      <Button
+        size='lg'
+        className='w-full'
+        onClick={() => (window.location.href = '/')}
+      >
+        Finish
+      </Button>
+    </div>
+  )
+}
 
   if (error) {
     return (
@@ -1380,11 +1306,11 @@ export default function AdaptiveTestController({
                     if (!audioUrl) return null
 
                     return (
-                      <div
+                      <ImageListenOptionCard
                         key={`${currentQuestion.id}-${letter}`}
-                        className="flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm"
+                        className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'
                       >
-                        <div className="flex items-center justify-center w-full">
+                        <div className='flex items-center justify-center w-full'>
                           <audio
                             id={`opt-audio-${letter}`}
                             src={audioUrl}
@@ -1393,9 +1319,9 @@ export default function AdaptiveTestController({
                             onPause={() => setMediaPlaying(false)}
                           />
                           <button
-                            type="button"
+                            type='button'
                             disabled={mediaPlaying}
-                            className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
                             onClick={() => {
                               if (mediaPlaying) return
                               const el = document.getElementById(
@@ -1405,17 +1331,17 @@ export default function AdaptiveTestController({
                             }}
                           >
                             <svg
-                              className="w-7 h-7 text-white fill-current ml-1"
-                              viewBox="0 0 24 24"
+                              className='w-7 h-7 text-white fill-current ml-1'
+                              viewBox='0 0 24 24'
                             >
-                              <path d="M8 5v14l11-7z" />
+                              <path d='M8 5v14l11-7z' />
                             </svg>
                           </button>
                         </div>
 
                         <button
-                          type="button"
-                          className="w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden"
+                          type='button'
+                          className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
                           onClick={() =>
                             handleAnswer(
                               letter === currentQuestion.correct_answer,
@@ -1424,16 +1350,16 @@ export default function AdaptiveTestController({
                         >
                           <svg
                             style={{ width: '60px', height: '60px' }}
-                            className="shrink-0 transition-transform group-hover:scale-110"
-                            fill="none"
-                            stroke="currentColor"
+                            className='shrink-0 transition-transform group-hover:scale-110'
+                            fill='none'
+                            stroke='currentColor'
                             strokeWidth={3.5}
-                            viewBox="0 0 24 24"
+                            viewBox='0 0 24 24'
                           >
                             <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 13l4 4L19 7"
+                              strokeLinecap='round'
+                              strokeLinejoin='round'
+                              d='M5 13l4 4L19 7'
                             />
                           </svg>
                         </button>
@@ -1483,21 +1409,21 @@ export default function AdaptiveTestController({
 
             <div className="grid gap-4">
               {currentQuestion.q_type === 'listen_choose' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
                   {['a', 'b', 'c'].map((letter) => (
                     <button
                       key={`${currentQuestion.id}-${letter}`}
                       onClick={() =>
                         handleAnswer(letter === currentQuestion.correct_answer)
                       }
-                      className="group relative aspect-square overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-zinc-900 hover:shadow-md active:scale-95"
+                      className='group relative aspect-square overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-zinc-900 hover:shadow-md active:scale-95'
                     >
                       <img
                         src={currentQuestion.options[letter]}
                         alt={`Option ${letter}`}
-                        className="h-full w-full object-contain"
+                        className='h-full w-full object-contain'
                       />
-                      <div className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold uppercase text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors">
+                      <div className='absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold uppercase text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors'>
                         {letter}
                       </div>
                     </button>
@@ -1560,7 +1486,75 @@ export default function AdaptiveTestController({
   )
 }
 
-// --- SUB-COMPONENTS FOR MEDIA PLAYERS ---
+// --- SUB-COMPONENTS ---
+
+interface ImageListenOptionProps {
+  letter: string
+  audioUrl: string
+  mediaPlaying: boolean
+  setMediaPlaying: (playing: boolean) => void
+  onSelectOption: () => void
+}
+
+function ImageListenOptionCard({
+  audioUrl,
+  mediaPlaying,
+  setMediaPlaying,
+  onSelectOption,
+}: ImageListenOptionProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  return (
+    <div className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'>
+      <div className='flex items-center justify-center w-full'>
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          onPlay={() => setMediaPlaying(true)}
+          onEnded={() => setMediaPlaying(false)}
+          onPause={() => setMediaPlaying(false)}
+        />
+        <button
+          type='button'
+          disabled={mediaPlaying}
+          className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
+          onClick={() => {
+            if (mediaPlaying || !audioRef.current) return
+            audioRef.current.play()
+          }}
+        >
+          <svg
+            className='w-7 h-7 text-white fill-current ml-1'
+            viewBox='0 0 24 24'
+          >
+            <path d='M8 5v14l11-7z' />
+          </svg>
+        </button>
+      </div>
+
+      <button
+        type='button'
+        className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
+        onClick={onSelectOption}
+      >
+        <svg
+          style={{ width: '60px', height: '60px' }}
+          className='shrink-0 transition-transform group-hover:scale-110'
+          fill='none'
+          stroke='currentColor'
+          strokeWidth={3.5}
+          viewBox='0 0 24 24'
+        >
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            d='M5 13l4 4L19 7'
+          />
+        </svg>
+      </button>
+    </div>
+  )
+}
 
 interface MediaProps {
   questionId: string
@@ -1579,18 +1573,20 @@ function AudioPlayerCard({
   setPlayedMediaIds,
 }: MediaProps & { audioUrl: string }) {
   const isPlayed = playedMediaIds.includes(questionId)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   return (
     <div className="bg-zinc-50 p-8 rounded-2xl border mb-6 max-w-xl mx-auto w-full text-center space-y-4 shadow-sm">
       <audio
-        id={`audio-${questionId}`}
+        ref={audioRef}
         key={audioUrl}
+        src={audioUrl}
         onEnded={() => {
           setMediaPlaying(false)
           setPlayedMediaIds((prev) => [...prev, questionId])
         }}
       >
-        <source src={audioUrl} type="audio/mpeg" />
+        <source src={audioUrl} type='audio/mpeg' />
       </audio>
 
       <div className="flex justify-center items-center py-2">
@@ -1604,11 +1600,8 @@ function AudioPlayerCard({
                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
           }`}
           onClick={() => {
-            const audioEl = document.getElementById(
-              `audio-${questionId}`,
-            ) as HTMLAudioElement
-            if (audioEl) {
-              audioEl.play()
+            if (audioRef.current) {
+              audioRef.current.play()
               setMediaPlaying(true)
             }
           }}
@@ -1680,11 +1673,12 @@ function VideoPlayerCard({
   setPlayedMediaIds,
 }: MediaProps & { videoUrl: string }) {
   const isPlayed = playedMediaIds.includes(questionId)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   return (
     <div className="bg-zinc-950 rounded-2xl border shadow-md max-w-2xl mx-auto w-full overflow-hidden mb-6 relative group aspect-video">
       <video
-        id={`video-${questionId}`}
+        ref={videoRef}
         key={videoUrl}
         playsInline
         className="w-full h-full object-contain mx-auto bg-black"
@@ -1706,11 +1700,8 @@ function VideoPlayerCard({
                 : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
             }`}
             onClick={() => {
-              const videoEl = document.getElementById(
-                `video-${questionId}`,
-              ) as HTMLVideoElement
-              if (videoEl) {
-                videoEl.play()
+              if (videoRef.current) {
+                videoRef.current.play()
                 setMediaPlaying(true)
               }
             }}

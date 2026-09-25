@@ -1,4 +1,4 @@
-// // src\logic\adaptive\strategies.ts
+// src\logic\adaptive\strategies.ts
 
 // import { AdaptiveStrategy, StrategyName } from '@/types/test'
 
@@ -58,7 +58,13 @@
 
 // src/logic/adaptive/strategies.ts
 
-import { AdaptiveStrategy, StrategyName } from '@/types/test'
+import {
+  AdaptiveAction,
+  AdaptiveStrategy,
+  CEFRLevel,
+  StrategyContext,
+  StrategyName,
+} from '@/types/test'
 
 export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
   // Good for KG and Prathom (Forgiving)
@@ -112,8 +118,6 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
     name: 'Universal Dynamic Assessment',
     minQuestions: 18,
     maxQuestions: 30,
-
-    // Moves up if 4 correct answers are found in the recent window of up to 6
     shouldMoveUp: (history) => {
       if (history.length < 4) return false
       const recent = history.slice(-6)
@@ -123,8 +127,6 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
       // Ensure 'up' threshold is met AND priority isn't overridden by 'down' streak
       return correctCount >= 4 && incorrectCount < 3
     },
-
-    // Drops down if 3 wrong answers are found in the recent window of up to 6
     shouldMoveDown: (history) => {
       if (history.length < 3) return false
       const recent = history.slice(-6)

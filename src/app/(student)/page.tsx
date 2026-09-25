@@ -87,22 +87,18 @@ export default function SelectionPage() {
           Please select your test track
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4 w-full">
-          <Button
-            asChild
-            className="flex-1 h-16 text-lg border-2 bg-white/90 hover:bg-white text-slate-900 shadow-sm"
-            variant="outline"
-          >
-            <Link href="/young-learner">Young Learner</Link>
-          </Button>
+        <div className='flex flex-col sm:flex-row gap-4 w-full max-w-[450px]'>
+          <Link href='/young-learner' className='flex-1'>
+            <Button className='w-full h-16 text-lg border-2' variant='outline'>
+              Young Learner
+            </Button>
+          </Link>
 
-          <Button
-            asChild
-            className="flex-1 h-16 text-lg border-2 bg-white/90 hover:bg-white text-slate-900 shadow-sm"
-            variant="outline"
-          >
-            <Link href="/adult">Adult</Link>
-          </Button>
+          <Link href='/adult' className='flex-1'>
+            <Button className='w-full h-16 text-lg border-2' variant='outline'>
+              Adult
+            </Button>
+          </Link>
         </div>
       </div>
 
