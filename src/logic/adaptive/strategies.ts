@@ -56,6 +56,8 @@
 // }
 
 
+// src\logic\adaptive\strategies.ts
+
 import { AdaptiveStrategy, StrategyName } from '@/types/test';
 
 export const SIX_QUESTION_DYNAMIC: AdaptiveStrategy = {
@@ -63,13 +65,13 @@ export const SIX_QUESTION_DYNAMIC: AdaptiveStrategy = {
   minQuestions: 18,
   maxQuestions: 30,
   shouldMoveUp: (history) => {
-    if (history.length < 6) return false;
+    if (history.length < 4) return false;
     const recentSix = history.slice(-6);
     const correctCount = recentSix.filter(Boolean).length;
     return correctCount >= 4;
   },
   shouldMoveDown: (history) => {
-    if (history.length < 6) return false;
+    if (history.length < 3) return false;
     const recentSix = history.slice(-6);
     const incorrectCount = recentSix.filter((val) => !val).length;
     return incorrectCount >= 3;

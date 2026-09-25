@@ -7,7 +7,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
-import { STRATEGIES as TEST_STRATEGIES } from '@/logic/adaptive/strategies'
+import { 
+  STRATEGIES as TEST_STRATEGIES,
+  calculateNextLevel // <--- Import from strategies here!
+} from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
 import { 
   CEFR_LEVELS, 
@@ -95,37 +98,37 @@ export default function AdaptiveTestController({
     isFinished: false,
   })
 
-  const calculateNextLevel = useCallback(
-    (
-      current: string,
-      direction: 'up' | 'down',
-      floorLevel: string | null,
-    ): string => {
-      const idx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === current.toLowerCase(),
-      )
-      if (idx === -1) return current
+  // const calculateNextLevel = useCallback(
+  //   (
+  //     current: string,
+  //     direction: 'up' | 'down',
+  //     floorLevel: string | null,
+  //   ): string => {
+  //     const idx = categoryLevels.findIndex(
+  //       (l) => l.toLowerCase() === current.toLowerCase(),
+  //     )
+  //     if (idx === -1) return current
 
-      if (direction === 'up') {
-        return idx < categoryLevels.length - 1
-          ? categoryLevels[idx + 1]
-          : categoryLevels[idx]
-      }
+  //     if (direction === 'up') {
+  //       return idx < categoryLevels.length - 1
+  //         ? categoryLevels[idx + 1]
+  //         : categoryLevels[idx]
+  //     }
 
-      if (direction === 'down') {
-        if (floorLevel) {
-          const floorIdx = categoryLevels.findIndex(
-            (l) => l.toLowerCase() === floorLevel.toLowerCase(),
-          )
-          if (idx <= floorIdx) return categoryLevels[idx]
-        }
-        return idx > 0 ? categoryLevels[idx - 1] : categoryLevels[idx]
-      }
+  //     if (direction === 'down') {
+  //       if (floorLevel) {
+  //         const floorIdx = categoryLevels.findIndex(
+  //           (l) => l.toLowerCase() === floorLevel.toLowerCase(),
+  //         )
+  //         if (idx <= floorIdx) return categoryLevels[idx]
+  //       }
+  //       return idx > 0 ? categoryLevels[idx - 1] : categoryLevels[idx]
+  //     }
 
-      return current
-    },
-    [categoryLevels],
-  )
+  //     return current
+  //   },
+  //   [categoryLevels],
+  // )
 
   const stopAllMedia = useCallback(() => {
     setMediaPlaying(false)
@@ -239,105 +242,118 @@ export default function AdaptiveTestController({
     loadInitialQuestion()
   }, [initialSession, supabase])
 
-  const handleAnswer = async (isCorrect: boolean) => {
-    if (!currentQuestion) return
+const handleAnswer = async (isCorrect: boolean) => {
+  if (!currentQuestion) return
 
-    stopAllMedia()
+  stopAllMedia()
 
-    const newEntry: HistoryEntry = {
-      level: currentQuestion.level,
-      correct: isCorrect,
+  const newEntry: HistoryEntry = {
+    level: currentQuestion.level,
+    correct: isCorrect,
+  }
+  const updatedFullHistory = [...fullHistory, newEntry]
+  setFullHistory(updatedFullHistory)
+
+  const updatedUsedIds = [...usedQuestionIds, currentQuestion.id]
+  setUsedQuestionIds(updatedUsedIds)
+
+  const total = stats.totalAnswered + 1
+
+  // 1. MAX QUESTIONS REACHED TERMINATION
+  if (total >= strategy.maxQuestions) {
+    let recommendedTargetLevel = stats.currentLevel
+
+    // If they passed a floor level, target is 1 level above that floor
+    if (highestPassedLevel) {
+      recommendedTargetLevel = calculateNextLevel(
+        highestPassedLevel,
+        'up',
+        categoryLevels,
+      )
     }
-    const updatedFullHistory = [...fullHistory, newEntry]
-    setFullHistory(updatedFullHistory)
 
-    const updatedUsedIds = [...usedQuestionIds, currentQuestion.id]
-    setUsedQuestionIds(updatedUsedIds)
+    console.log(
+      `[AdaptiveEngine] Max questions (${strategy.maxQuestions}) reached. Recommending target level: "${recommendedTargetLevel}".`,
+    )
+    await finalizeTest(recommendedTargetLevel, total, updatedFullHistory)
+    return
+  }
 
-    const total = stats.totalAnswered + 1
+  const newLevelHistory = [...currentLevelHistory, isCorrect]
+  let nextLevel = stats.currentLevel
+  let updatedFloor = highestPassedLevel
 
-    if (total >= strategy.maxQuestions) {
-      const awardLevel = highestPassedLevel || stats.currentLevel
-      await finalizeTest(awardLevel, total, updatedFullHistory)
+  if (strategy.shouldMoveUp(newLevelHistory)) {
+    const currentIdx = categoryLevels.findIndex(
+      (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
+    )
+    const prevFloorIdx = categoryLevels.findIndex(
+      (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
+    )
+
+    if (currentIdx > prevFloorIdx) {
+      updatedFloor = stats.currentLevel
+      setHighestPassedLevel(updatedFloor)
+    }
+
+    // Move to next higher level
+    nextLevel = calculateNextLevel(stats.currentLevel, 'up', categoryLevels)
+
+    // Reset window on level escalation
+    setCurrentLevelHistory([])
+  } else if (strategy.shouldMoveDown(newLevelHistory)) {
+    // Drop to next lower level
+    nextLevel = calculateNextLevel(stats.currentLevel, 'down', categoryLevels)
+
+    const floorIdx = categoryLevels.findIndex(
+      (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
+    )
+    const nextIdx = categoryLevels.findIndex(
+      (l) => l.toLowerCase() === nextLevel.toLowerCase(),
+    )
+
+    // 2. CEILING TRIGGER EARLY EXIT
+    if (highestPassedLevel && nextIdx <= floorIdx) {
+      // stats.currentLevel represents the level above highestPassedLevel where they hit their limit
+      const recommendedTargetLevel = stats.currentLevel
+
+      console.log(
+        `[AdaptiveEngine] Ceiling reached at ${stats.currentLevel}! Highest passed: "${highestPassedLevel}". Recommending target study level: "${recommendedTargetLevel}".`,
+      )
+      await finalizeTest(recommendedTargetLevel, total, updatedFullHistory)
       return
     }
 
-    const newLevelHistory = [...currentLevelHistory, isCorrect]
-    let nextLevel = stats.currentLevel
-    let updatedFloor = highestPassedLevel
+    // Reset window on level drop
+    setCurrentLevelHistory([])
+  } else {
+    // Accumulate history while remaining at current level
+    setCurrentLevelHistory(newLevelHistory)
+  }
 
-    if (strategy.shouldMoveUp(newLevelHistory)) {
-      const currentIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
-      )
-      const prevFloorIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
-      )
+  setStats((prev) => ({
+    ...prev,
+    currentLevel: nextLevel,
+    totalAnswered: total,
+  }))
 
-      if (currentIdx > prevFloorIdx) {
-        updatedFloor = stats.currentLevel
-        setHighestPassedLevel(updatedFloor)
-      }
-
-      nextLevel = calculateNextLevel(stats.currentLevel, 'up', updatedFloor)
-
-      // Reset window on level escalation
-      setCurrentLevelHistory([])
-    } else if (strategy.shouldMoveDown(newLevelHistory)) {
-      nextLevel = calculateNextLevel(
-        stats.currentLevel,
-        'down',
-        highestPassedLevel,
-      )
-
-      // EARLY EXIT TRIGGER:
-      // If student fails at current level and hits/drops to an established floor,
-      // their ceiling is officially proven. Finalize immediately!
-      const floorIdx = CEFR_LEVELS.findIndex(
-        (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
-      )
-      const nextIdx = CEFR_LEVELS.findIndex(
-        (l) => l.toLowerCase() === nextLevel.toLowerCase(),
-      )
-
-      if (highestPassedLevel && nextIdx <= floorIdx) {
-        console.log(
-          `[AdaptiveEngine] Ceiling reached! Student failed at higher level. Finalizing at floor "${highestPassedLevel}".`,
-        )
-        await finalizeTest(highestPassedLevel, total, updatedFullHistory)
-        return
-      }
-
-      // Reset window on level drop
-      setCurrentLevelHistory([])
-    } else {
-      // Accumulate history while remaining at current level
-      setCurrentLevelHistory(newLevelHistory)
-    }
-
-    setStats((prev) => ({
-      ...prev,
-      currentLevel: nextLevel,
-      totalAnswered: total,
-    }))
-
-    if (total % 5 === 0) {
-      updateTestResult(
-        initialSession.sessionId,
-        nextLevel,
-        false,
-        updatedFullHistory,
-      )
-    }
-
-    fetchQuestion(
-      initialSession.testType,
+  if (total % 5 === 0) {
+    updateTestResult(
+      initialSession.sessionId,
       nextLevel,
-      updatedUsedIds,
-      total,
+      false,
       updatedFullHistory,
     )
   }
+
+  fetchQuestion(
+    initialSession.testType,
+    nextLevel,
+    updatedUsedIds,
+    total,
+    updatedFullHistory,
+  )
+}
 
 if (stats.isFinished) {
   return (
