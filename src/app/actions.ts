@@ -1,8 +1,19 @@
-// //src\app\actions.ts
 
+
+// // src/app/actions.ts
 // 'use server'
 
 // import { createClient } from '@/lib/server'
+
+// export type TestIdentity = 'KG' | 'Prathom' | 'Mathayom' | 'Adult'
+
+// export interface RecommendedBook {
+//   id: string
+//   name: string
+//   test_identity: TestIdentity
+//   cefr_level: string
+//   inlingua_level: number | null
+// }
 
 // export async function getActiveBranches() {
 //   const supabase = await createClient()
@@ -39,7 +50,7 @@
 
 //   return {
 //     sessionId: data.id,
-//     testType: data.test_type,
+//     testType: data.test_type as TestIdentity,
 //     startingLevel: data.started_at_level,
 //   }
 // }
@@ -92,79 +103,170 @@
 
 //   return {
 //     sessionId: session.id,
-//     testType: mapping.test_to_serve,
+//     testType: mapping.test_to_serve as TestIdentity,
 //     startingLevel: mapping.starting_level,
 //   }
 // }
 
 // /**
-//  * Updates existing test record with CEFR result, status, and question history.
-//  * Accepts the optional 4th argument to store granular question levels and outcomes.
+//  * Fetches all books from the database for initial server-side load.
 //  */
-// export async function updateTestResult(
-//   sessionId: string,
-//   finalLevel: string,
-//   isFinished: boolean = false,
-//   questionHistory: { level: string; correct: boolean }[] = [],
-// ) {
-//   const supabase = await createClient()
-
-//   const { data, error } = await supabase
-//     .from('test_results')
-//     .update({
-//       final_result: finalLevel as any,
-//       status: isFinished ? 'completed' : 'in_progress',
-//       question_history: questionHistory, // Maps to JSONB column in Supabase
-//     })
-//     .eq('id', sessionId)
-//     .select()
-
-//   if (error) {
-//     console.error('[updateTestResult] Error:', error.message)
-//     return { success: false, error: error.message }
-//   }
-
-//   if (!data || data.length === 0) {
-//     return { success: false, error: 'Record not found' }
-//   }
-
-//   return { success: true }
-// }
-
-// export type TestIdentity = 'KG' | 'Prathom' | 'Mathayom' | 'Adult'
-
-// export interface RecommendedBook {
-//   id: string
-//   name: string
-//   test_identity: TestIdentity
-//   cefr_level: string
-//   inlingua_level: number | null
-// }
-
-// /**
-//  * Fetches recommended books from the database based on the student's test category
-//  * and final CEFR level (including fine-grained '+' levels like A2+).
-//  */
-// export async function getRecommendedBooks(
-//   testIdentity: TestIdentity,
-//   cefrLevel: string
-// ): Promise<RecommendedBook[]> {
+// export async function getCourseBooks(): Promise<RecommendedBook[]> {
 //   const supabase = await createClient()
 
 //   const { data, error } = await supabase
 //     .from('books')
 //     .select('id, name, test_identity, cefr_level, inlingua_level')
-//     .eq('test_identity', testIdentity)
-//     .or(`cefr_level.eq.${cefrLevel},cefr_level.eq.${cefrLevel}+`)
 //     .order('inlingua_level', { ascending: true, nullsFirst: false })
 
 //   if (error) {
-//     console.error('[getRecommendedBooks] Error fetching books:', error.message)
+//     console.error('[getCourseBooks] Error:', error.message)
 //     return []
 //   }
 
-//   return data ?? []
+//   return (data as RecommendedBook[]) ?? []
 // }
+
+// /**
+//  * Fetches recommended books from the database based on the student's test category
+//  * and final CEFR level.
+//  */
+// export async function getRecommendedBooks(
+//   testIdentity: TestIdentity,
+//   cefrLevel: string
+// ): Promise<RecommendedBook[]> {
+//   console.log(`\n🔍 [getRecommendedBooks] Searching books table for test_identity="${testIdentity}", cefr_level="${cefrLevel}"`)
+
+//   const supabase = await createClient()
+
+//   // Clean and trim the level input
+//   const cleanLevel = cefrLevel.trim()
+
+//   // 1. Try exact match using trimmed level
+//   const { data, error } = await supabase
+//     .from('books')
+//     .select('id, name, test_identity, cefr_level, inlingua_level')
+//     .eq('test_identity', testIdentity)
+//     .ilike('cefr_level', `%${cleanLevel}%`) // Using wildcard search to capture "A1", "A1 ", etc.
+//     .order('inlingua_level', { ascending: true, nullsFirst: false })
+
+//   if (error) {
+//     console.error('❌ [getRecommendedBooks] DB Error:', error.message)
+//     return []
+//   }
+
+//   console.log(`📊 [getRecommendedBooks] Matches found for (${testIdentity}, ${cleanLevel}):`, data?.length ?? 0)
+
+//   // 2. Fallback: If no books found for this specific test identity, inspect available levels for 'KG'
+//   if (!data || data.length === 0) {
+//     console.warn(`⚠️ No books matched for test_identity="${testIdentity}" AND cefr_level="${cleanLevel}".`)
+    
+//     // Check what books actually exist for this testIdentity to diagnose schema mismatched levels
+//     const { data: allIdentityBooks } = await supabase
+//       .from('books')
+//       .select('name, cefr_level, inlingua_level')
+//       .eq('test_identity', testIdentity)
+
+//     console.log(`💡 Available books in DB for test_identity="${testIdentity}":`, allIdentityBooks)
+//   }
+
+//   return (data as RecommendedBook[]) ?? []
+// }
+
+// /**
+//  * Updates existing test record with CEFR result, status, question history,
+//  * and matched coursebook results.
+//  */
+// // 
+
+// export async function updateTestResult(
+//   sessionId: string,
+//   finalLevel: string,
+//   isFinished: boolean = false,
+//   questionHistory: { level: string; correct: boolean }[] = [],
+//   recommendedBooks?: string[]
+// ) {
+//   console.log('\n================ [updateTestResult] START ================')
+//   console.log('📌 Input sessionId:', sessionId)
+//   console.log('📌 Input finalLevel:', finalLevel)
+//   console.log('📌 Input isFinished:', isFinished)
+//   console.log('📌 Input recommendedBooks passed:', recommendedBooks)
+
+//   const supabase = await createClient()
+
+//   let booksToSave: string[] = recommendedBooks || []
+
+//   // If books were not explicitly passed in, calculate them on the server
+//   if (!recommendedBooks || recommendedBooks.length === 0) {
+//     console.log('🔍 Querying test_results by primary key `id` for test_type...')
+
+//     const { data: session, error: sessionError } = await supabase
+//       .from('test_results')
+//       .select('test_type')
+//       .eq('id', sessionId)
+//       .maybeSingle()
+
+//     if (sessionError) {
+//       console.error('❌ Error fetching session test_type:', sessionError.message)
+//     }
+
+//     console.log('📦 Session record retrieved from DB:', session)
+
+//     if (session?.test_type) {
+//       console.log(`📚 Calling getRecommendedBooks(testType: "${session.test_type}", level: "${finalLevel}")...`)
+      
+//       const books = await getRecommendedBooks(
+//         session.test_type as TestIdentity,
+//         finalLevel
+//       )
+      
+//       console.log('📖 Raw books retrieved from getRecommendedBooks:', books)
+
+//       if (!books || books.length === 0) {
+//         console.warn(`⚠️ getRecommendedBooks returned NO books for test_type "${session.test_type}" and level "${finalLevel}"`)
+//       }
+      
+//       booksToSave = books ? books.map((b) => b.name) : []
+//       console.log('✅ Final book names to save:', booksToSave)
+//     } else {
+//       console.warn('⚠️ WARNING: Could not find session or test_type is missing/null!')
+//     }
+//   }
+
+//   const updatePayload = {
+//     final_result: finalLevel as any,
+//     status: isFinished ? 'completed' : 'in_progress',
+//     question_history: questionHistory,
+//     recommended_books: booksToSave,
+//   }
+
+//   console.log('💾 Updating DB with payload:', updatePayload)
+
+//   const { data, error } = await supabase
+//     .from('test_results')
+//     .update(updatePayload)
+//     .eq('id', sessionId)
+//     .select()
+
+//   if (error) {
+//     console.error('❌ [updateTestResult] Database Error:', error.message)
+//     console.log('================ [updateTestResult] END ==================\n')
+//     return { success: false, error: error.message }
+//   }
+
+//   if (!data || data.length === 0) {
+//     console.error('❌ [updateTestResult] Record not found. No rows updated for ID:', sessionId)
+//     console.log('================ [updateTestResult] END ==================\n')
+//     return { success: false, error: 'Record not found' }
+//   }
+
+//   console.log('🎉 [updateTestResult] Success! Saved row in DB:', data[0])
+//   console.log('================ [updateTestResult] END ==================\n')
+
+//   return { success: true, recommendedBooks: booksToSave }
+// }
+
+
 
 // src/app/actions.ts
 'use server'
@@ -181,7 +283,7 @@ export interface RecommendedBook {
   inlingua_level: number | null
 }
 
-export async function getActiveBranches() {
+export async function getActiveBranches(): Promise<string[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('branches')
@@ -217,7 +319,7 @@ export async function getSessionData(sessionId: string) {
   return {
     sessionId: data.id,
     testType: data.test_type as TestIdentity,
-    startingLevel: data.started_at_level,
+    startingLevel: data.started_at_level as string,
   }
 }
 
@@ -255,7 +357,7 @@ export async function initializeTestSession(data: {
       student_name: data.name,
       age: data.category === 'Young Learner' ? data.age : null,
       branch_name: data.branch,
-      test_type: mapping.test_to_serve as any,
+      test_type: mapping.test_to_serve as TestIdentity,
       started_at_level: mapping.starting_level,
       status: 'started',
     })
@@ -270,7 +372,7 @@ export async function initializeTestSession(data: {
   return {
     sessionId: session.id,
     testType: mapping.test_to_serve as TestIdentity,
-    startingLevel: mapping.starting_level,
+    startingLevel: mapping.starting_level as string,
   }
 }
 
@@ -295,7 +397,7 @@ export async function getCourseBooks(): Promise<RecommendedBook[]> {
 
 /**
  * Fetches recommended books from the database based on the student's test category
- * and final CEFR level.
+ * and exact CEFR level.
  */
 export async function getRecommendedBooks(
   testIdentity: TestIdentity,
@@ -305,15 +407,14 @@ export async function getRecommendedBooks(
 
   const supabase = await createClient()
 
-  // Clean and trim the level input
   const cleanLevel = cefrLevel.trim()
 
-  // 1. Try exact match using trimmed level
+  // 1. Exact match on clean level
   const { data, error } = await supabase
     .from('books')
     .select('id, name, test_identity, cefr_level, inlingua_level')
     .eq('test_identity', testIdentity)
-    .ilike('cefr_level', `%${cleanLevel}%`) // Using wildcard search to capture "A1", "A1 ", etc.
+    .eq('cefr_level', cleanLevel)
     .order('inlingua_level', { ascending: true, nullsFirst: false })
 
   if (error) {
@@ -323,11 +424,10 @@ export async function getRecommendedBooks(
 
   console.log(`📊 [getRecommendedBooks] Matches found for (${testIdentity}, ${cleanLevel}):`, data?.length ?? 0)
 
-  // 2. Fallback: If no books found for this specific test identity, inspect available levels for 'KG'
+  // 2. Fallback diagnostic log if no books found
   if (!data || data.length === 0) {
     console.warn(`⚠️ No books matched for test_identity="${testIdentity}" AND cefr_level="${cleanLevel}".`)
     
-    // Check what books actually exist for this testIdentity to diagnose schema mismatched levels
     const { data: allIdentityBooks } = await supabase
       .from('books')
       .select('name, cefr_level, inlingua_level')
@@ -343,13 +443,11 @@ export async function getRecommendedBooks(
  * Updates existing test record with CEFR result, status, question history,
  * and matched coursebook results.
  */
-// 
-
 export async function updateTestResult(
   sessionId: string,
   finalLevel: string,
   isFinished: boolean = false,
-  questionHistory: { level: string; correct: boolean }[] = [],
+  questionHistory: Array<{ level: string; correct: boolean }> = [],
   recommendedBooks?: string[]
 ) {
   console.log('\n================ [updateTestResult] START ================')
@@ -400,7 +498,7 @@ export async function updateTestResult(
   }
 
   const updatePayload = {
-    final_result: finalLevel as any,
+    final_result: finalLevel,
     status: isFinished ? 'completed' : 'in_progress',
     question_history: questionHistory,
     recommended_books: booksToSave,
