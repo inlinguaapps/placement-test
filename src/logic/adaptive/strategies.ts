@@ -58,16 +58,10 @@
 
 // src/logic/adaptive/strategies.ts
 
-import {
-  AdaptiveAction,
-  AdaptiveStrategy,
-  CEFRLevel,
-  StrategyContext,
-  StrategyName,
-} from '@/types/test'
+import { AdaptiveStrategy, StrategyName } from '@/types/test'
 
 export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
-  // Good for KG and Prathom (Forgiving)
+  // Good for KG and Prathom (Forgiving: 2 correct in recent 3)
   HYBRID_STANDARD: {
     name: 'Standard Hybrid (2-of-3 Up)',
     minQuestions: 12,
@@ -83,7 +77,7 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
     },
   },
 
-  // Good for Matayom (Strict)
+  // Good for Matayom (Strict: 3 correct in a row)
   STRICT_ACADEMIC: {
     name: 'Strict Academic (3-Streak)',
     minQuestions: 15,
@@ -98,7 +92,7 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
     },
   },
 
-  // Use for quick placement or demo tests
+  // Rapid placement test (2 in a row)
   FAST_TRACK: {
     name: 'Rapid Assessment',
     minQuestions: 8,
@@ -113,7 +107,7 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
     },
   },
 
-  // Dynamic 6-Question window with fast-exit triggers
+  // Universal Dynamic Assessment (Rolling window of up to 6 questions per level)
   SIX_QUESTION_DYNAMIC: {
     name: 'Universal Dynamic Assessment',
     minQuestions: 18,
@@ -123,8 +117,8 @@ export const TEST_STRATEGIES: Record<StrategyName, AdaptiveStrategy> = {
       const recent = history.slice(-6)
       const correctCount = recent.filter((v) => v === true).length
       const incorrectCount = recent.filter((v) => v === false).length
-      
-      // Ensure 'up' threshold is met AND priority isn't overridden by 'down' streak
+
+      // Requires 4 correct in current level window, without failing 3 times
       return correctCount >= 4 && incorrectCount < 3
     },
     shouldMoveDown: (history) => {
