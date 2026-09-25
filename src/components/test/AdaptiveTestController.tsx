@@ -7,9 +7,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
-import { TEST_STRATEGIES } from '@/logic/adaptive/strategies'
+import { STRATEGIES as TEST_STRATEGIES } from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
-import { getLevelsForTestType } from '@/types/level-config'
+import { 
+  CEFR_LEVELS, 
+  getLevelsForCategory as getLevelsForTestType 
+} from '@/types/level-config'
 
 interface Question {
   id: string
@@ -468,87 +471,87 @@ if (stats.isFinished) {
                 </div>
               )}
 
-            {currentQuestion.q_type === 'image_listen_choose' && (
-              <div className="space-y-6">
-                {currentQuestion.image_url && (
-                  <div className="rounded-xl overflow-hidden border bg-white max-w-md mx-auto shadow-sm">
-                    <img
-                      src={currentQuestion.image_url}
-                      alt="Context"
-                      className="w-full h-auto object-contain max-h-[350px] mx-auto"
-                    />
-                  </div>
-                )}
+ {currentQuestion.q_type === 'image_listen_choose' && (
+  <div className="space-y-6">
+    {currentQuestion.image_url && (
+      <div className="rounded-xl overflow-hidden border bg-white mb-4 flex justify-center p-4">
+        <img
+          src={currentQuestion.image_url}
+          alt="Question context"
+          className="max-h-64 object-contain rounded-lg"
+        />
+      </div>
+    )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  {['a', 'b', 'c'].map((letter) => {
-                    const audioUrl = currentQuestion.options?.[letter]
-                    if (!audioUrl) return null
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      {(['a', 'b', 'c'] as const).map((letter) => {
+        const audioKey = `audio_url_${letter}` as keyof Question
+        const audioUrl = currentQuestion[audioKey] as string | undefined
 
-                    return (
-                      <ImageListenOptionCard
-                        key={`${currentQuestion.id}-${letter}`}
-                        className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'
-                      >
-                        <div className='flex items-center justify-center w-full'>
-                          <audio
-                            id={`opt-audio-${letter}`}
-                            src={audioUrl}
-                            onPlay={() => setMediaPlaying(true)}
-                            onEnded={() => setMediaPlaying(false)}
-                            onPause={() => setMediaPlaying(false)}
-                          />
-                          <button
-                            type='button'
-                            disabled={mediaPlaying}
-                            className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
-                            onClick={() => {
-                              if (mediaPlaying) return
-                              const el = document.getElementById(
-                                `opt-audio-${letter}`,
-                              ) as HTMLAudioElement
-                              el?.play()
-                            }}
-                          >
-                            <svg
-                              className='w-7 h-7 text-white fill-current ml-1'
-                              viewBox='0 0 24 24'
-                            >
-                              <path d='M8 5v14l11-7z' />
-                            </svg>
-                          </button>
-                        </div>
+        if (!audioUrl) return null
 
-                        <button
-                          type='button'
-                          className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
-                          onClick={() =>
-                            handleAnswer(
-                              letter === currentQuestion.correct_answer,
-                            )
-                          }
-                        >
-                          <svg
-                            style={{ width: '60px', height: '60px' }}
-                            className='shrink-0 transition-transform group-hover:scale-110'
-                            fill='none'
-                            stroke='currentColor'
-                            strokeWidth={3.5}
-                            viewBox='0 0 24 24'
-                          >
-                            <path
-                              strokeLinecap='round'
-                              strokeLinejoin='round'
-                              d='M5 13l4 4L19 7'
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+        return (
+          <div
+            key={`${currentQuestion.id}-${letter}`}
+            className="flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm"
+          >
+            <div className="flex items-center justify-center w-full">
+              <audio
+                id={`opt-audio-${letter}`}
+                src={audioUrl}
+                onPlay={() => setMediaPlaying(true)}
+                onEnded={() => setMediaPlaying(false)}
+                onPause={() => setMediaPlaying(false)}
+              />
+              <button
+                type="button"
+                disabled={mediaPlaying}
+                className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                onClick={() => {
+                  if (mediaPlaying) return
+                  const el = document.getElementById(
+                    `opt-audio-${letter}`
+                  ) as HTMLAudioElement
+                  el?.play()
+                }}
+              >
+                <svg
+                  className="w-7 h-7 text-white fill-current ml-1"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden"
+              onClick={() =>
+                handleAnswer(letter === currentQuestion.correct_answer)
+              }
+            >
+              <svg
+                style={{ width: '60px', height: '60px' }}
+                className="shrink-0 transition-transform group-hover:scale-110"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={3.5}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  </div>
+)}
 
             {currentQuestion.q_type === 'image_context' &&
               currentQuestion.image_url && (
