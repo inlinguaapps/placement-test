@@ -91,6 +91,7 @@ export default function AdaptiveTestController({
   const [highestPassedLevel, setHighestPassedLevel] = useState<string | null>(
     null,
   )
+  const [isLevelEstablished, setIsLevelEstablished] = useState(false)
 
   const [stats, setStats] = useState({
     currentLevel: initialSession.startingLevel,
@@ -259,23 +260,10 @@ const handleAnswer = async (isCorrect: boolean) => {
 
   const total = stats.totalAnswered + 1
 
-  // 1. MAX QUESTIONS REACHED TERMINATION
+  // A. MAX QUESTIONS LIMIT REACHED
   if (total >= strategy.maxQuestions) {
-    let recommendedTargetLevel = stats.currentLevel
-
-    // If they passed a floor level, target is 1 level above that floor
-    if (highestPassedLevel) {
-      recommendedTargetLevel = calculateNextLevel(
-        highestPassedLevel,
-        'up',
-        categoryLevels,
-      )
-    }
-
-    console.log(
-      `[AdaptiveEngine] Max questions (${strategy.maxQuestions}) reached. Recommending target level: "${recommendedTargetLevel}".`,
-    )
-    await finalizeTest(recommendedTargetLevel, total, updatedFullHistory)
+    console.log(`[AdaptiveEngine] Max questions (${strategy.maxQuestions}) reached. Finalizing at ${stats.currentLevel}.`)
+    await finalizeTest(stats.currentLevel, total, updatedFullHistory)
     return
   }
 
@@ -283,7 +271,20 @@ const handleAnswer = async (isCorrect: boolean) => {
   let nextLevel = stats.currentLevel
   let updatedFloor = highestPassedLevel
 
-  if (strategy.shouldMoveUp(newLevelHistory)) {
+  // B. IF LEVEL IS ALREADY ESTABLISHED / LOCKED
+  if (isLevelEstablished) {
+    if (total >= strategy.minQuestions) {
+      console.log(`[AdaptiveEngine] Min questions (${strategy.minQuestions}) met while level locked. Finalizing test.`)
+      await finalizeTest(stats.currentLevel, total, updatedFullHistory)
+      return
+    }
+
+    // Lock level fixed at current level until minQuestions (18) is met
+    nextLevel = stats.currentLevel
+    setCurrentLevelHistory(newLevelHistory)
+
+  // C. NORMAL ADAPTIVE MOVEMENT (LEVEL NOT YET LOCKED)
+  } else if (strategy.shouldMoveUp(newLevelHistory)) {
     const currentIdx = categoryLevels.findIndex(
       (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
     )
@@ -296,38 +297,43 @@ const handleAnswer = async (isCorrect: boolean) => {
       setHighestPassedLevel(updatedFloor)
     }
 
-    // Move to next higher level
     nextLevel = calculateNextLevel(stats.currentLevel, 'up', categoryLevels)
-
-    // Reset window on level escalation
     setCurrentLevelHistory([])
+
   } else if (strategy.shouldMoveDown(newLevelHistory)) {
-    // Drop to next lower level
-    nextLevel = calculateNextLevel(stats.currentLevel, 'down', categoryLevels)
+    const calculatedNext = calculateNextLevel(stats.currentLevel, 'down', categoryLevels)
 
     const floorIdx = categoryLevels.findIndex(
       (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
     )
     const nextIdx = categoryLevels.findIndex(
-      (l) => l.toLowerCase() === nextLevel.toLowerCase(),
+      (l) => l.toLowerCase() === calculatedNext.toLowerCase(),
     )
 
-    // 2. CEILING TRIGGER EARLY EXIT
+    // CEILING EXIT CONDITION MET
     if (highestPassedLevel && nextIdx <= floorIdx) {
-      // stats.currentLevel represents the level above highestPassedLevel where they hit their limit
-      const recommendedTargetLevel = stats.currentLevel
+      const targetLevel = stats.currentLevel // e.g., B1 if they passed A2 and failed B1
 
-      console.log(
-        `[AdaptiveEngine] Ceiling reached at ${stats.currentLevel}! Highest passed: "${highestPassedLevel}". Recommending target study level: "${recommendedTargetLevel}".`,
-      )
-      await finalizeTest(recommendedTargetLevel, total, updatedFullHistory)
-      return
+      // 1. Min questions met -> Finalize immediately
+      if (total >= strategy.minQuestions) {
+        console.log(`[AdaptiveEngine] Ceiling reached & minQuestions (${strategy.minQuestions}) met. Finalizing at ${targetLevel}.`)
+        await finalizeTest(targetLevel, total, updatedFullHistory)
+        return
+      }
+
+      // 2. Under min questions -> Lock level at targetLevel until Q18
+      console.log(`[AdaptiveEngine] Ceiling reached at ${stats.currentLevel}, but total (${total}) < minQuestions (${strategy.minQuestions}). Locking level at ${targetLevel}.`)
+      setIsLevelEstablished(true)
+      nextLevel = targetLevel
+      setCurrentLevelHistory([])
+
+    } else {
+      // Normal step down
+      nextLevel = calculatedNext
+      setCurrentLevelHistory([])
     }
-
-    // Reset window on level drop
-    setCurrentLevelHistory([])
   } else {
-    // Accumulate history while remaining at current level
+    // Accumulate history at current level
     setCurrentLevelHistory(newLevelHistory)
   }
 
