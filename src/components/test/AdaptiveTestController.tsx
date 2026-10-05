@@ -1,4 +1,3 @@
-
 // src/components/test/AdaptiveTestController.tsx
 
 'use client'
@@ -7,10 +6,15 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
-import { TEST_STRATEGIES } from '@/logic/adaptive/strategies'
+import { 
+  STRATEGIES as TEST_STRATEGIES,
+  calculateNextLevel
+} from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
-import { getLevelsForTestType, CEFR_LEVELS } from '@/types/level-config'
-
+import { 
+  CEFR_LEVELS, 
+  getLevelsForCategory as getLevelsForTestType 
+} from '@/types/level-config'
 
 interface Question {
   id: string
@@ -86,44 +90,13 @@ export default function AdaptiveTestController({
   const [highestPassedLevel, setHighestPassedLevel] = useState<string | null>(
     null,
   )
+  const [isLevelEstablished, setIsLevelEstablished] = useState(false)
 
   const [stats, setStats] = useState({
     currentLevel: initialSession.startingLevel,
     totalAnswered: 0,
     isFinished: false,
   })
-
-  const calculateNextLevel = useCallback(
-    (
-      current: string,
-      direction: 'up' | 'down',
-      floorLevel: string | null,
-    ): string => {
-      const idx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === current.toLowerCase(),
-      )
-      if (idx === -1) return current
-
-      if (direction === 'up') {
-        return idx < categoryLevels.length - 1
-          ? categoryLevels[idx + 1]
-          : categoryLevels[idx]
-      }
-
-      if (direction === 'down') {
-        if (floorLevel) {
-          const floorIdx = categoryLevels.findIndex(
-            (l) => l.toLowerCase() === floorLevel.toLowerCase(),
-          )
-          if (idx <= floorIdx) return categoryLevels[idx]
-        }
-        return idx > 0 ? categoryLevels[idx - 1] : categoryLevels[idx]
-      }
-
-      return current
-    },
-    [categoryLevels],
-  )
 
   const stopAllMedia = useCallback(() => {
     setMediaPlaying(false)
@@ -140,37 +113,37 @@ export default function AdaptiveTestController({
       stopAllMedia()
       setIsSaving(true)
 
-    // Fetch matching books for the achieved CEFR level and test stream
-    const { data: booksData } = await supabase
-      .from('books') // <-- Replace with your actual table name if different
-      .select('id, name, inlingua_level')
-      .eq('cefr_level', finalLevel)
-      .eq('test_identity', initialSession.testType)
-      .order('inlingua_level', { ascending: true })
+      // Fetch matching books for the achieved CEFR level and test stream
+      const { data: booksData } = await supabase
+        .from('books')
+        .select('id, name, inlingua_level')
+        .eq('cefr_level', finalLevel)
+        .eq('test_identity', initialSession.testType)
+        .order('inlingua_level', { ascending: true })
 
-    if (booksData) {
-      setRecommendedBooks(booksData)
-    }
+      if (booksData) {
+        setRecommendedBooks(booksData)
+      }
 
-    await updateTestResult(
-      initialSession.sessionId,
-      finalLevel,
-      true,
-      history,
-    )
+      await updateTestResult(
+        initialSession.sessionId,
+        finalLevel,
+        true,
+        history,
+      )
 
-    setStats((prev) => ({
-      ...prev,
-      isFinished: true,
-      totalAnswered: total,
-      currentLevel: finalLevel,
-    }))
-    setIsSaving(false)
-  },
-  [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
-)
+      setStats((prev) => ({
+        ...prev,
+        isFinished: true,
+        totalAnswered: total,
+        currentLevel: finalLevel,
+      }))
+      setIsSaving(false)
+    },
+    [initialSession.sessionId, initialSession.testType, stopAllMedia, supabase],
+  )
 
-const fetchQuestion = useCallback(
+  const fetchQuestion = useCallback(
     async (
       testType: string,
       level: string,
@@ -201,14 +174,13 @@ const fetchQuestion = useCallback(
         setError('Technical error loading question.')
         setLoading(false)
       } else if (!data) {
-        // FIXED: Uses passed parameters directly instead of stale stats state values
         finalizeTest(level, currentTotalAnswered, historyEntries)
       } else {
         setCurrentQuestion(data as Question)
         setLoading(false)
       }
     },
-    [supabase, finalizeTest], // Cleaned up state dependencies since level/history are now passed explicitly
+    [supabase, finalizeTest],
   )
 
   useEffect(() => {
@@ -238,7 +210,7 @@ const fetchQuestion = useCallback(
     loadInitialQuestion()
   }, [initialSession, supabase])
 
-const handleAnswer = async (isCorrect: boolean) => {
+  const handleAnswer = async (isCorrect: boolean) => {
     if (!currentQuestion) return
 
     stopAllMedia()
@@ -255,9 +227,10 @@ const handleAnswer = async (isCorrect: boolean) => {
 
     const total = stats.totalAnswered + 1
 
+    // A. MAX QUESTIONS LIMIT REACHED
     if (total >= strategy.maxQuestions) {
-      const awardLevel = highestPassedLevel || stats.currentLevel
-      await finalizeTest(awardLevel, total, updatedFullHistory)
+      console.log(`[AdaptiveEngine] Max questions (${strategy.maxQuestions}) reached. Finalizing at ${stats.currentLevel}.`)
+      await finalizeTest(stats.currentLevel, total, updatedFullHistory)
       return
     }
 
@@ -265,7 +238,20 @@ const handleAnswer = async (isCorrect: boolean) => {
     let nextLevel = stats.currentLevel
     let updatedFloor = highestPassedLevel
 
-    if (strategy.shouldMoveUp(newLevelHistory)) {
+    // B. IF LEVEL IS ALREADY ESTABLISHED / LOCKED
+    if (isLevelEstablished) {
+      if (total >= strategy.minQuestions) {
+        console.log(`[AdaptiveEngine] Min questions (${strategy.minQuestions}) met while level locked. Finalizing test.`)
+        await finalizeTest(stats.currentLevel, total, updatedFullHistory)
+        return
+      }
+
+      // Lock level fixed at current level until minQuestions is met
+      nextLevel = stats.currentLevel
+      setCurrentLevelHistory(newLevelHistory)
+
+    // C. NORMAL ADAPTIVE MOVEMENT (LEVEL NOT YET LOCKED)
+    } else if (strategy.shouldMoveUp(newLevelHistory)) {
       const currentIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
       )
@@ -278,38 +264,43 @@ const handleAnswer = async (isCorrect: boolean) => {
         setHighestPassedLevel(updatedFloor)
       }
 
-      nextLevel = calculateNextLevel(stats.currentLevel, 'up', updatedFloor)
-
-      // Reset window on level escalation
+      nextLevel = calculateNextLevel(stats.currentLevel, 'up', categoryLevels)
       setCurrentLevelHistory([])
-    } else if (strategy.shouldMoveDown(newLevelHistory)) {
-      nextLevel = calculateNextLevel(
-        stats.currentLevel,
-        'down',
-        highestPassedLevel,
-      )
 
-      // EARLY EXIT TRIGGER:
-      // Uses categoryLevels instead of CEFR_LEVELS so non-standard scale levels don't return -1
+    } else if (strategy.shouldMoveDown(newLevelHistory)) {
+      const calculatedNext = calculateNextLevel(stats.currentLevel, 'down', categoryLevels)
+
       const floorIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
       )
       const nextIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === nextLevel.toLowerCase(),
+        (l) => l.toLowerCase() === calculatedNext.toLowerCase(),
       )
 
+      // CEILING EXIT CONDITION MET
       if (highestPassedLevel && nextIdx <= floorIdx) {
-        console.log(
-          `[AdaptiveEngine] Ceiling reached! Student failed at higher level. Finalizing at floor "${highestPassedLevel}".`,
-        )
-        await finalizeTest(highestPassedLevel, total, updatedFullHistory)
-        return
-      }
+        const targetLevel = stats.currentLevel // e.g., B1 if they passed A2 and failed B1
 
-      // Reset window on level drop
-      setCurrentLevelHistory([])
+        // 1. Min questions met -> Finalize immediately
+        if (total >= strategy.minQuestions) {
+          console.log(`[AdaptiveEngine] Ceiling reached & minQuestions (${strategy.minQuestions}) met. Finalizing at ${targetLevel}.`)
+          await finalizeTest(targetLevel, total, updatedFullHistory)
+          return
+        }
+
+        // 2. Under min questions -> Lock level at targetLevel until minQuestions
+        console.log(`[AdaptiveEngine] Ceiling reached at ${stats.currentLevel}, but total (${total}) < minQuestions (${strategy.minQuestions}). Locking level at ${targetLevel}.`)
+        setIsLevelEstablished(true)
+        nextLevel = targetLevel
+        setCurrentLevelHistory([])
+
+      } else {
+        // Normal step down
+        nextLevel = calculatedNext
+        setCurrentLevelHistory([])
+      }
     } else {
-      // Accumulate history while remaining at current level
+      // Accumulate history at current level
       setCurrentLevelHistory(newLevelHistory)
     }
 
@@ -337,59 +328,59 @@ const handleAnswer = async (isCorrect: boolean) => {
     )
   }
 
-if (stats.isFinished) {
-  return (
-    <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
-      <h2 className='text-3xl font-bold'>Test Complete!</h2>
+  if (stats.isFinished) {
+    return (
+      <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
+        <h2 className='text-3xl font-bold'>Test Complete!</h2>
 
-      <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
-        <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
-          DEV MODE: Estimated Level
-        </p>
-        <span className='text-6xl font-black'>{stats.currentLevel}</span>
-      </div>
-
-      {/* Dynamic Database Books Section */}
-      {recommendedBooks.length > 0 && (
-        <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
-          <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
-            Recommended Coursebooks ({initialSession.testType})
-          </h3>
-          <ul className='space-y-2.5'>
-            {recommendedBooks.map((book) => (
-              <li
-                key={book.id}
-                className='flex items-center justify-between text-zinc-800 font-medium text-sm'
-              >
-                <div className='flex items-center gap-2'>
-                  <span className='text-amber-500'>📖</span>
-                  <span>{book.name}</span>
-                </div>
-                {book.inlingua_level !== null && (
-                  <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
-                    Level {book.inlingua_level}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+        <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
+          <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
+            DEV MODE: Estimated Level
+          </p>
+          <span className='text-6xl font-black'>{stats.currentLevel}</span>
         </div>
-      )}
 
-      <p className='text-zinc-500 text-sm text-balance'>
-        Your results have been recorded. Our team will review your score shortly.
-      </p>
+        {/* Dynamic Database Books Section */}
+        {recommendedBooks.length > 0 && (
+          <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
+            <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
+              Recommended Coursebooks ({initialSession.testType})
+            </h3>
+            <ul className='space-y-2.5'>
+              {recommendedBooks.map((book) => (
+                <li
+                  key={book.id}
+                  className='flex items-center justify-between text-zinc-800 font-medium text-sm'
+                >
+                  <div className='flex items-center gap-2'>
+                    <span className='text-amber-500'>📖</span>
+                    <span>{book.name}</span>
+                  </div>
+                  {book.inlingua_level !== null && (
+                    <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
+                      Level {book.inlingua_level}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-      <Button
-        size='lg'
-        className='w-full'
-        onClick={() => (window.location.href = '/')}
-      >
-        Finish
-      </Button>
-    </div>
-  )
-}
+        <p className='text-zinc-500 text-sm text-balance'>
+          Your results have been recorded. Our team will review your score shortly.
+        </p>
+
+        <Button
+          size='lg'
+          className='w-full'
+          onClick={() => (window.location.href = '/')}
+        >
+          Finish
+        </Button>
+      </div>
+    )
+  }
 
   if (error) {
     return (
@@ -469,87 +460,87 @@ if (stats.isFinished) {
                 </div>
               )}
 
-      {currentQuestion.q_type === 'image_listen_choose' && (
-  <div className="space-y-6">
-    {currentQuestion.image_url && (
-      <div className="rounded-xl overflow-hidden border bg-white max-w-md mx-auto shadow-sm">
-        <img
-          src={currentQuestion.image_url}
-          alt="Context"
-          className="w-full h-auto object-contain max-h-[350px] mx-auto"
-        />
-      </div>
-    )}
+            {currentQuestion.q_type === 'image_listen_choose' && (
+              <div className="space-y-6">
+                {currentQuestion.image_url && (
+                  <div className="rounded-xl overflow-hidden border bg-white max-w-md mx-auto shadow-sm">
+                    <img
+                      src={currentQuestion.image_url}
+                      alt="Context"
+                      className="w-full h-auto object-contain max-h-[350px] mx-auto"
+                    />
+                  </div>
+                )}
 
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-      {['a', 'b', 'c'].map((letter) => {
-        const audioUrl = currentQuestion.options?.[letter]
-        if (!audioUrl) return null
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  {['a', 'b', 'c'].map((letter) => {
+                    const audioUrl = currentQuestion.options?.[letter]
+                    if (!audioUrl) return null
 
-        return (
-          <div
-            key={`${currentQuestion.id}-${letter}`}
-            className="flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm"
-          >
-            <div className="flex items-center justify-center w-full">
-              <audio
-                id={`opt-audio-${currentQuestion.id}-${letter}`}
-                src={audioUrl}
-                onPlay={() => setMediaPlaying(true)}
-                onEnded={() => setMediaPlaying(false)}
-                onPause={() => setMediaPlaying(false)}
-              />
-              <button
-                type="button"
-                disabled={mediaPlaying}
-                className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                onClick={() => {
-                  if (mediaPlaying) return
-                  const el = document.getElementById(
-                    `opt-audio-${currentQuestion.id}-${letter}`,
-                  ) as HTMLAudioElement
-                  el?.play()
-                }}
-              >
-                <svg
-                  className="w-7 h-7 text-white fill-current ml-1"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </button>
-            </div>
+                    return (
+                      <div
+                        key={`${currentQuestion.id}-${letter}`}
+                        className="flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm"
+                      >
+                        <div className="flex items-center justify-center w-full">
+                          <audio
+                            id={`opt-audio-${currentQuestion.id}-${letter}`}
+                            src={audioUrl}
+                            onPlay={() => setMediaPlaying(true)}
+                            onEnded={() => setMediaPlaying(false)}
+                            onPause={() => setMediaPlaying(false)}
+                          />
+                          <button
+                            type="button"
+                            disabled={mediaPlaying}
+                            className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            onClick={() => {
+                              if (mediaPlaying) return
+                              const el = document.getElementById(
+                                `opt-audio-${currentQuestion.id}-${letter}`,
+                              ) as HTMLAudioElement
+                              el?.play()
+                            }}
+                          >
+                            <svg
+                              className="w-7 h-7 text-white fill-current ml-1"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </button>
+                        </div>
 
-            <button
-              type="button"
-              className="w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden"
-              onClick={() =>
-                handleAnswer(
-                  letter === currentQuestion.correct_answer,
-                )
-              }
-            >
-              <svg
-                style={{ width: '60px', height: '60px' }}
-                className="shrink-0 transition-transform group-hover:scale-110"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={3.5}
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </button>
-          </div>
-        )
-      })}
-    </div>
-  </div>
-)}
+                        <button
+                          type="button"
+                          className="w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden"
+                          onClick={() =>
+                            handleAnswer(
+                              letter === currentQuestion.correct_answer,
+                            )
+                          }
+                        >
+                          <svg
+                            style={{ width: '60px', height: '60px' }}
+                            className="shrink-0 transition-transform group-hover:scale-110"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={3.5}
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {currentQuestion.q_type === 'image_context' &&
               currentQuestion.image_url && (
@@ -669,74 +660,6 @@ if (stats.isFinished) {
 
 // --- SUB-COMPONENTS ---
 
-interface ImageListenOptionProps {
-  letter: string
-  audioUrl: string
-  mediaPlaying: boolean
-  setMediaPlaying: (playing: boolean) => void
-  onSelectOption: () => void
-}
-
-function ImageListenOptionCard({
-  audioUrl,
-  mediaPlaying,
-  setMediaPlaying,
-  onSelectOption,
-}: ImageListenOptionProps) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  return (
-    <div className='flex flex-col items-center gap-4 p-4 border border-zinc-200 rounded-2xl bg-zinc-50/50 shadow-sm'>
-      <div className='flex items-center justify-center w-full'>
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          onPlay={() => setMediaPlaying(true)}
-          onEnded={() => setMediaPlaying(false)}
-          onPause={() => setMediaPlaying(false)}
-        />
-        <button
-          type='button'
-          disabled={mediaPlaying}
-          className='flex items-center justify-center w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none'
-          onClick={() => {
-            if (mediaPlaying || !audioRef.current) return
-            audioRef.current.play()
-          }}
-        >
-          <svg
-            className='w-7 h-7 text-white fill-current ml-1'
-            viewBox='0 0 24 24'
-          >
-            <path d='M8 5v14l11-7z' />
-          </svg>
-        </button>
-      </div>
-
-      <button
-        type='button'
-        className='w-full h-24 rounded-xl border border-zinc-200 bg-white hover:bg-emerald-600 hover:border-emerald-600 text-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95 flex items-center justify-center p-0 overflow-hidden'
-        onClick={onSelectOption}
-      >
-        <svg
-          style={{ width: '60px', height: '60px' }}
-          className='shrink-0 transition-transform group-hover:scale-110'
-          fill='none'
-          stroke='currentColor'
-          strokeWidth={3.5}
-          viewBox='0 0 24 24'
-        >
-          <path
-            strokeLinecap='round'
-            strokeLinejoin='round'
-            d='M5 13l4 4L19 7'
-          />
-        </svg>
-      </button>
-    </div>
-  )
-}
-
 interface MediaProps {
   questionId: string
   mediaPlaying: boolean
@@ -792,54 +715,15 @@ function AudioPlayerCard({
           )}
 
           {isPlayed ? (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M5 13l4 4L19 7"
-              />
+            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
             </svg>
-          ) : mediaPlaying ? (
-            <div className="flex items-end gap-1 h-6">
-              <span
-                className="w-1 bg-white rounded-full animate-bounce h-full"
-                style={{ animationDuration: '0.6s' }}
-              />
-              <span
-                className="w-1 bg-white rounded-full animate-bounce h-3/4"
-                style={{ animationDuration: '0.4s' }}
-              />
-              <span
-                className="w-1 bg-white rounded-full animate-bounce h-1/2"
-                style={{ animationDuration: '0.8s' }}
-              />
-            </div>
           ) : (
-            <svg
-              className="w-8 h-8 ml-1"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <polygon points="5,3 19,12 5,21" />
+            <svg className="w-8 h-8 fill-current ml-1" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
             </svg>
           )}
         </button>
-      </div>
-
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-zinc-700">
-          {isPlayed
-            ? 'Audio Completed'
-            : mediaPlaying
-              ? 'Listen closely...'
-              : 'Listen once only'}
-        </p>
       </div>
     </div>
   )
@@ -857,29 +741,21 @@ function VideoPlayerCard({
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   return (
-    <div className="bg-zinc-950 rounded-2xl border shadow-md max-w-2xl mx-auto w-full overflow-hidden mb-6 relative group aspect-video">
-      <video
-        ref={videoRef}
-        key={videoUrl}
-        playsInline
-        className="w-full h-full object-contain mx-auto bg-black"
-        onEnded={() => {
-          setMediaPlaying(false)
-          setPlayedMediaIds((prev) => [...prev, questionId])
-        }}
-      >
-        <source src={videoUrl} type="video/mp4" />
-      </video>
-
-      {(!mediaPlaying || isPlayed) && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center p-4 transition-all">
+    <div className="bg-zinc-50 p-4 rounded-2xl border mb-6 max-w-xl mx-auto w-full text-center space-y-4 shadow-sm">
+      <div className="relative rounded-xl overflow-hidden bg-black max-h-[350px]">
+        <video
+          ref={videoRef}
+          key={videoUrl}
+          src={videoUrl}
+          className="w-full h-auto max-h-[350px] object-contain"
+          onEnded={() => {
+            setMediaPlaying(false)
+            setPlayedMediaIds((prev) => [...prev, questionId])
+          }}
+        />
+        {!mediaPlaying && !isPlayed && (
           <button
-            disabled={isPlayed}
-            className={`flex items-center justify-center w-20 h-20 rounded-full transition-all duration-300 shadow-xl ${
-              isPlayed
-                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'
-                : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105 active:scale-95'
-            }`}
+            className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
             onClick={() => {
               if (videoRef.current) {
                 videoRef.current.play()
@@ -887,43 +763,12 @@ function VideoPlayerCard({
               }
             }}
           >
-            {isPlayed ? (
-              <svg
-                className="w-8 h-8"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-8 h-8 ml-1"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
-            )}
+            <svg className="w-8 h-8 fill-current ml-1" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
           </button>
-
-          <p className="text-xs text-zinc-300 mt-3 font-medium tracking-wide bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
-            {isPlayed ? 'Video Locked' : 'Watch once only'}
-          </p>
-        </div>
-      )}
-
-      {mediaPlaying && !isPlayed && (
-        <div className="absolute top-3 left-3 bg-black/70 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          Playing
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
