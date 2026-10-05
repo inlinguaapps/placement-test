@@ -148,7 +148,7 @@ export function LoginForm({
 
     const supabase = createClient()
 
-    try {
+try {
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -156,8 +156,8 @@ export function LoginForm({
 
       if (authError) throw authError
 
-      router.push('/dashboard')
-      router.refresh()
+      // Triggers a full page request carrying fresh session cookies to /dashboard
+      window.location.href = '/dashboard'
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
