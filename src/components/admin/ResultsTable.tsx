@@ -668,7 +668,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                   { label: 'Type', key: 'test_type' },
                   { label: 'Age', key: 'age' },
                   { label: 'Branch', key: 'branch_name' },
-                  { label: 'Level', key: 'final_result' },
+                  { label: 'Level to Study', key: 'final_result' },
                 ].map((column) => (
                   <TableHead
                     key={column.key}
