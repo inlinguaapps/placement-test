@@ -1,4 +1,4 @@
-// // // src\components\admin\ResultsTable.tsx
+// // src\components\admin\ResultsTable.tsx
 
 // 'use client'
 
@@ -27,6 +27,16 @@
 //   TooltipProvider,
 //   TooltipTrigger,
 // } from '@/components/ui/tooltip'
+// import {
+//   AlertDialog,
+//   AlertDialogAction,
+//   AlertDialogCancel,
+//   AlertDialogContent,
+//   AlertDialogDescription,
+//   AlertDialogFooter,
+//   AlertDialogHeader,
+//   AlertDialogTitle,
+// } from '@/components/ui/alert-dialog'
 // import {
 //   Search,
 //   ChevronLeft,
@@ -77,6 +87,7 @@
 //   const [data, setData] = useState<TestResult[]>([])
 //   const [loading, setLoading] = useState(true)
 //   const [deletingId, setDeletingId] = useState<string | null>(null)
+//   const [itemToDelete, setItemToDelete] = useState<TestResult | null>(null)
 //   const [searchTerm, setSearchTerm] = useState('')
 //   const [currentPage, setCurrentPage] = useState(1)
 //   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -101,12 +112,10 @@
 //     fetchResults()
 //   }, [branchFilter, supabase])
 
-//   const handleDelete = async (id: string) => {
-//     const confirmed = window.confirm(
-//       'Are you sure you want to delete this test result? This action cannot be undone.'
-//     )
-//     if (!confirmed) return
+//   const confirmDelete = async () => {
+//     if (!itemToDelete) return
 
+//     const id = itemToDelete.id
 //     try {
 //       setDeletingId(id)
 //       await deleteTestResult(id)
@@ -115,6 +124,7 @@
 //       alert('Failed to delete the result. Please try again.')
 //     } finally {
 //       setDeletingId(null)
+//       setItemToDelete(null)
 //     }
 //   }
 
@@ -242,7 +252,6 @@
 //                   </div>
 //                 </TableHead>
 
-//                 {/* Actions Column */}
 //                 <TableHead className="w-[60px] text-center">Actions</TableHead>
 //               </TableRow>
 //             </TableHeader>
@@ -290,7 +299,7 @@
 //                       <Button
 //                         variant="ghost"
 //                         size="icon"
-//                         onClick={() => handleDelete(result.id)}
+//                         onClick={() => setItemToDelete(result)}
 //                         disabled={deletingId === result.id}
 //                         className="h-8 w-8 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 dark:hover:text-red-400 transition-colors"
 //                         title="Delete Result"
@@ -365,6 +374,36 @@
 //             </Button>
 //           </div>
 //         </div>
+
+//         {/* shadcn Delete Confirmation Modal */}
+//         <AlertDialog
+//           open={!!itemToDelete}
+//           onOpenChange={(open) => {
+//             if (!open) setItemToDelete(null)
+//           }}
+//         >
+//           <AlertDialogContent>
+//             <AlertDialogHeader>
+//               <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+//               <AlertDialogDescription>
+//                 This action cannot be undone. This will permanently delete the test
+//                 result for{' '}
+//                 <span className="font-semibold text-foreground">
+//                   {itemToDelete?.student_name}
+//                 </span>.
+//               </AlertDialogDescription>
+//             </AlertDialogHeader>
+//             <AlertDialogFooter>
+//               <AlertDialogCancel>Cancel</AlertDialogCancel>
+//               <AlertDialogAction
+//                 onClick={confirmDelete}
+//                 className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
+//               >
+//                 Delete
+//               </AlertDialogAction>
+//             </AlertDialogFooter>
+//           </AlertDialogContent>
+//         </AlertDialog>
 //       </div>
 //     </TooltipProvider>
 //   )
@@ -395,7 +434,8 @@
 //   )
 // }
 
-// src\components\admin\ResultsTable.tsx
+
+// src/components/admin/ResultsTable.tsx
 
 'use client'
 
@@ -418,12 +458,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -463,6 +498,7 @@ interface TestResult {
   status?: string | null
   started_at_level?: string | null
   question_history: QuestionHistoryItem[] | null
+  recommended_books: string[] | string | null
 }
 
 type SortField =
@@ -477,6 +513,14 @@ type SortOrder = 'asc' | 'desc'
 
 interface ResultsTableProps {
   branchFilter?: string | null
+}
+
+function formatRecommendedBooks(books: string[] | string | null): string {
+  if (!books) return '—'
+  if (Array.isArray(books)) {
+    return books.length > 0 ? books.join(', ') : '—'
+  }
+  return String(books) || '—'
 }
 
 export function ResultsTable({ branchFilter }: ResultsTableProps) {
@@ -539,11 +583,13 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
 
     const filtered = data.filter((item) => {
       if (!s) return true
+      const booksDisplay = formatRecommendedBooks(item.recommended_books).toLowerCase()
       return (
         (item.student_name || '').toLowerCase().includes(s) ||
         (item.test_type || '').toLowerCase().includes(s) ||
         (item.branch_name || '').toLowerCase().includes(s) ||
-        (item.final_result || '').toLowerCase().includes(s)
+        (item.final_result || '').toLowerCase().includes(s) ||
+        booksDisplay.includes(s)
       )
     })
 
@@ -637,7 +683,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                   </TableHead>
                 ))}
 
-                <TableHead>Answers Progress</TableHead>
+                <TableHead>Recommended Book</TableHead>
 
                 <TableHead
                   onClick={() => handleSort('created_at')}
@@ -677,8 +723,8 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                       </span>
                     </TableCell>
 
-                    <TableCell>
-                      <DnaStrip history={result.question_history} />
+                    <TableCell className="font-medium text-zinc-800 dark:text-zinc-200">
+                      {formatRecommendedBooks(result.recommended_books)}
                     </TableCell>
 
                     <TableCell className="text-left text-muted-foreground tabular-nums whitespace-nowrap">
@@ -772,7 +818,6 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
           </div>
         </div>
 
-        {/* shadcn Delete Confirmation Modal */}
         <AlertDialog
           open={!!itemToDelete}
           onOpenChange={(open) => {
@@ -803,30 +848,5 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
         </AlertDialog>
       </div>
     </TooltipProvider>
-  )
-}
-
-function DnaStrip({ history }: { history: QuestionHistoryItem[] | null }) {
-  if (!history || history.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 overflow-x-auto max-w-[200px] py-1 scrollbar-none">
-      {history.map((q, i) => (
-        <Tooltip key={i}>
-          <TooltipTrigger asChild>
-            <span
-              className={`w-3 h-3 rounded-full transition-transform hover:scale-125 shrink-0 inline-block cursor-help ${
-                q.correct ? 'bg-emerald-500' : 'bg-rose-500'
-              }`}
-            />
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs font-semibold">
-            Q{i + 1}: Level {q.level} ({q.correct ? 'Correct' : 'Incorrect'})
-          </TooltipContent>
-        </Tooltip>
-      ))}
-    </div>
   )
 }
