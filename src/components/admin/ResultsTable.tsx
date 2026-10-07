@@ -1,4 +1,4 @@
-// // src\components\admin\ResultsTable.tsx
+// // // src\components\admin\ResultsTable.tsx
 
 // 'use client'
 
@@ -35,8 +35,10 @@
 //   ArrowUp,
 //   ArrowDown,
 //   Loader2,
+//   Trash2,
 // } from 'lucide-react'
 // import { createClient } from '@/lib/client'
+// import { deleteTestResult } from '@/app/actions'
 
 // interface QuestionHistoryItem {
 //   level: string
@@ -74,6 +76,7 @@
 //   const supabase = useMemo(() => createClient(), [])
 //   const [data, setData] = useState<TestResult[]>([])
 //   const [loading, setLoading] = useState(true)
+//   const [deletingId, setDeletingId] = useState<string | null>(null)
 //   const [searchTerm, setSearchTerm] = useState('')
 //   const [currentPage, setCurrentPage] = useState(1)
 //   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -98,6 +101,23 @@
 //     fetchResults()
 //   }, [branchFilter, supabase])
 
+//   const handleDelete = async (id: string) => {
+//     const confirmed = window.confirm(
+//       'Are you sure you want to delete this test result? This action cannot be undone.'
+//     )
+//     if (!confirmed) return
+
+//     try {
+//       setDeletingId(id)
+//       await deleteTestResult(id)
+//       setData((prev) => prev.filter((item) => item.id !== id))
+//     } catch {
+//       alert('Failed to delete the result. Please try again.')
+//     } finally {
+//       setDeletingId(null)
+//     }
+//   }
+
 //   const handleSort = (field: SortField) => {
 //     if (sortField === field) {
 //       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -105,11 +125,11 @@
 //       setSortField(field)
 //       setSortOrder('asc')
 //     }
-//   };
+//   }
 
 //   const processedData = useMemo(() => {
 //     const s = searchTerm.trim().toLowerCase()
-    
+
 //     const filtered = data.filter((item) => {
 //       if (!s) return true
 //       return (
@@ -221,6 +241,9 @@
 //                     {renderSortIndicator('created_at')}
 //                   </div>
 //                 </TableHead>
+
+//                 {/* Actions Column */}
+//                 <TableHead className="w-[60px] text-center">Actions</TableHead>
 //               </TableRow>
 //             </TableHeader>
 //             <TableBody>
@@ -262,12 +285,29 @@
 //                         hour12: false,
 //                       })}
 //                     </TableCell>
+
+//                     <TableCell className="text-center">
+//                       <Button
+//                         variant="ghost"
+//                         size="icon"
+//                         onClick={() => handleDelete(result.id)}
+//                         disabled={deletingId === result.id}
+//                         className="h-8 w-8 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 dark:hover:text-red-400 transition-colors"
+//                         title="Delete Result"
+//                       >
+//                         {deletingId === result.id ? (
+//                           <Loader2 size={16} className="animate-spin text-red-600" />
+//                         ) : (
+//                           <Trash2 size={16} />
+//                         )}
+//                       </Button>
+//                     </TableCell>
 //                   </TableRow>
 //                 ))
 //               ) : (
 //                 <TableRow>
 //                   <TableCell
-//                     colSpan={7}
+//                     colSpan={8}
 //                     className="h-24 text-center text-muted-foreground"
 //                   >
 //                     No results found.
@@ -355,6 +395,8 @@
 //   )
 // }
 
+// src\components\admin\ResultsTable.tsx
+
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
@@ -382,6 +424,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Search,
   ChevronLeft,
@@ -432,6 +484,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
   const [data, setData] = useState<TestResult[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [itemToDelete, setItemToDelete] = useState<TestResult | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -456,12 +509,10 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
     fetchResults()
   }, [branchFilter, supabase])
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this test result? This action cannot be undone.'
-    )
-    if (!confirmed) return
+  const confirmDelete = async () => {
+    if (!itemToDelete) return
 
+    const id = itemToDelete.id
     try {
       setDeletingId(id)
       await deleteTestResult(id)
@@ -470,6 +521,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
       alert('Failed to delete the result. Please try again.')
     } finally {
       setDeletingId(null)
+      setItemToDelete(null)
     }
   }
 
@@ -597,7 +649,6 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                   </div>
                 </TableHead>
 
-                {/* Actions Column */}
                 <TableHead className="w-[60px] text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -645,7 +696,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(result.id)}
+                        onClick={() => setItemToDelete(result)}
                         disabled={deletingId === result.id}
                         className="h-8 w-8 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 dark:hover:text-red-400 transition-colors"
                         title="Delete Result"
@@ -720,6 +771,36 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
             </Button>
           </div>
         </div>
+
+        {/* shadcn Delete Confirmation Modal */}
+        <AlertDialog
+          open={!!itemToDelete}
+          onOpenChange={(open) => {
+            if (!open) setItemToDelete(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the test
+                result for{' '}
+                <span className="font-semibold text-foreground">
+                  {itemToDelete?.student_name}
+                </span>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   )
