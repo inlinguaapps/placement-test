@@ -110,19 +110,22 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <nav className="sticky top-0 z-10 w-full border-b bg-white dark:bg-zinc-900 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="text-blue-600" size={24} />
-            <span className="font-bold text-xl tracking-tight">inlingua Admin</span>
-          </div>
+          {/* Left Navigation Section: Logo Title + Home Button */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="text-blue-600" size={24} />
+              <span className="font-bold text-xl tracking-tight">inlingua Admin</span>
+            </div>
 
-          <div className="flex items-center gap-4 sm:gap-6">
-            {/* Home Button with default shadcn styling */}
             <Button asChild>
               <Link href="/" target="_blank">
                 Home
               </Link>
             </Button>
+          </div>
 
+          {/* Right Navigation Section: User Greeting + Logout */}
+          <div className="flex items-center gap-4 sm:gap-6">
             <span className="hidden sm:inline text-sm text-muted-foreground">
               Welcome, <span className="font-medium text-foreground">{user.email}</span>
             </span>
