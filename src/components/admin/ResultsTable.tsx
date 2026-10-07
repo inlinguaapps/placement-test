@@ -450,7 +450,6 @@ import {
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -669,7 +668,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                   { label: 'Type', key: 'test_type' },
                   { label: 'Age', key: 'age' },
                   { label: 'Branch', key: 'branch_name' },
-                  { label: 'Level to Study', key: 'final_result' },
+                  { label: 'Level', key: 'final_result' },
                 ].map((column) => (
                   <TableHead
                     key={column.key}
@@ -708,24 +707,25 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                     <TableCell className="font-medium">
                       {result.student_name}
                     </TableCell>
+                    
+                    {/* Regular text for Type */}
                     <TableCell>
-                      <Badge variant="outline" className="font-normal">
-                        {result.test_type}
-                      </Badge>
+                      {result.test_type}
                     </TableCell>
+
                     <TableCell>
                       {result.age ? `${result.age} yrs` : '—'}
                     </TableCell>
                     <TableCell>{result.branch_name}</TableCell>
                     
-                    {/* Neutral styling for Level */}
+                    {/* Neutral text for Level */}
                     <TableCell>
                       <span className="font-medium text-zinc-900 dark:text-zinc-100">
                         {result.final_result}
                       </span>
                     </TableCell>
 
-                    {/* Blue styling for Recommended Book */}
+                    {/* Bold blue text for Recommended Book */}
                     <TableCell className="font-bold text-blue-600 dark:text-blue-400">
                       {formatRecommendedBooks(result.recommended_books)}
                     </TableCell>
