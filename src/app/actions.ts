@@ -529,3 +529,20 @@ export async function updateTestResult(
 
   return { success: true, recommendedBooks: booksToSave }
 }
+
+
+export async function deleteTestResult(sessionId: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('test_results')
+    .delete()
+    .eq('id', sessionId)
+
+  if (error) {
+    console.error('[deleteTestResult] Error:', error.message)
+    throw new Error('Failed to delete test result')
+  }
+
+  return { success: true }
+}

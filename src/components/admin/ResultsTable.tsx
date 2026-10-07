@@ -1,5 +1,4 @@
-// // // src\components\admin\ResultsTable.tsx
-
+// // src\components\admin\ResultsTable.tsx
 
 // 'use client'
 
@@ -33,6 +32,8 @@
 //   ChevronLeft,
 //   ChevronRight,
 //   ArrowUpDown,
+//   ArrowUp,
+//   ArrowDown,
 //   Loader2,
 // } from 'lucide-react'
 // import { createClient } from '@/lib/client'
@@ -70,7 +71,7 @@
 // }
 
 // export function ResultsTable({ branchFilter }: ResultsTableProps) {
-//   const supabase = createClient()
+//   const supabase = useMemo(() => createClient(), [])
 //   const [data, setData] = useState<TestResult[]>([])
 //   const [loading, setLoading] = useState(true)
 //   const [searchTerm, setSearchTerm] = useState('')
@@ -104,16 +105,18 @@
 //       setSortField(field)
 //       setSortOrder('asc')
 //     }
-//   }
+//   };
 
 //   const processedData = useMemo(() => {
+//     const s = searchTerm.trim().toLowerCase()
+    
 //     const filtered = data.filter((item) => {
-//       const s = searchTerm.toLowerCase()
+//       if (!s) return true
 //       return (
-//         item.student_name.toLowerCase().includes(s) ||
-//         item.test_type.toLowerCase().includes(s) ||
-//         item.branch_name.toLowerCase().includes(s) ||
-//         item.final_result.toLowerCase().includes(s)
+//         (item.student_name || '').toLowerCase().includes(s) ||
+//         (item.test_type || '').toLowerCase().includes(s) ||
+//         (item.branch_name || '').toLowerCase().includes(s) ||
+//         (item.final_result || '').toLowerCase().includes(s)
 //       )
 //     })
 
@@ -124,10 +127,16 @@
 //       if (valA === null || valA === undefined) return sortOrder === 'asc' ? -1 : 1
 //       if (valB === null || valB === undefined) return sortOrder === 'asc' ? 1 : -1
 
+//       if (sortField === 'created_at') {
+//         const timeA = new Date(valA as string).getTime()
+//         const timeB = new Date(valB as string).getTime()
+//         return sortOrder === 'asc' ? timeA - timeB : timeB - timeA
+//       }
+
 //       if (typeof valA === 'string' && typeof valB === 'string') {
 //         return sortOrder === 'asc'
-//           ? valA.localeCompare(valB)
-//           : valB.localeCompare(valA)
+//           ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+//           : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' })
 //       }
 
 //       if (valA < valB) return sortOrder === 'asc' ? -1 : 1
@@ -140,36 +149,47 @@
 //   const startIndex = (currentPage - 1) * itemsPerPage
 //   const paginatedData = processedData.slice(
 //     startIndex,
-//     startIndex + itemsPerPage,
+//     startIndex + itemsPerPage
 //   )
+
+//   const renderSortIndicator = (field: SortField) => {
+//     if (sortField !== field) {
+//       return <ArrowUpDown size={14} className="opacity-40" />
+//     }
+//     return sortOrder === 'asc' ? (
+//       <ArrowUp size={14} className="text-zinc-900 dark:text-zinc-100" />
+//     ) : (
+//       <ArrowDown size={14} className="text-zinc-900 dark:text-zinc-100" />
+//     )
+//   }
 
 //   if (loading) {
 //     return (
-//       <div className='h-64 flex items-center justify-center'>
-//         <Loader2 className='animate-spin text-blue-600' size={32} />
+//       <div className="h-64 flex items-center justify-center">
+//         <Loader2 className="animate-spin text-blue-600" size={32} />
 //       </div>
 //     )
 //   }
 
 //   return (
 //     <TooltipProvider>
-//       <div className='space-y-4'>
-//         <div className='relative max-w-sm'>
-//           <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' />
+//       <div className="space-y-4">
+//         <div className="relative max-w-sm">
+//           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
 //           <Input
-//             placeholder='Search results...'
+//             placeholder="Search results..."
 //             value={searchTerm}
 //             onChange={(e) => {
 //               setSearchTerm(e.target.value)
 //               setCurrentPage(1)
 //             }}
-//             className='pl-9'
+//             className="pl-9"
 //           />
 //         </div>
 
-//         <div className='rounded-md border bg-white dark:bg-zinc-900 overflow-hidden shadow-sm'>
+//         <div className="rounded-md border bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
 //           <Table>
-//             <TableHeader className='bg-zinc-50 dark:bg-zinc-800/50'>
+//             <TableHeader className="bg-zinc-50 dark:bg-zinc-800/50">
 //               <TableRow>
 //                 {[
 //                   { label: 'Name', key: 'student_name' },
@@ -181,11 +201,11 @@
 //                   <TableHead
 //                     key={column.key}
 //                     onClick={() => handleSort(column.key as SortField)}
-//                     className='cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors select-none'
+//                     className="cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors select-none"
 //                   >
-//                     <div className='flex items-center gap-1'>
+//                     <div className="flex items-center gap-1">
 //                       {column.label}
-//                       <ArrowUpDown size={14} className='opacity-50' />
+//                       {renderSortIndicator(column.key as SortField)}
 //                     </div>
 //                   </TableHead>
 //                 ))}
@@ -194,11 +214,11 @@
 
 //                 <TableHead
 //                   onClick={() => handleSort('created_at')}
-//                   className='cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors select-none'
+//                   className="cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors select-none"
 //                 >
-//                   <div className='flex items-center gap-1'>
+//                   <div className="flex items-center gap-1">
 //                     Date
-//                     <ArrowUpDown size={14} className='opacity-50' />
+//                     {renderSortIndicator('created_at')}
 //                   </div>
 //                 </TableHead>
 //               </TableRow>
@@ -208,13 +228,13 @@
 //                 paginatedData.map((result) => (
 //                   <TableRow
 //                     key={result.id}
-//                     className='hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 text-sm transition-colors'
+//                     className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 text-sm transition-colors"
 //                   >
-//                     <TableCell className='font-medium'>
+//                     <TableCell className="font-medium">
 //                       {result.student_name}
 //                     </TableCell>
 //                     <TableCell>
-//                       <Badge variant='outline' className='font-normal'>
+//                       <Badge variant="outline" className="font-normal">
 //                         {result.test_type}
 //                       </Badge>
 //                     </TableCell>
@@ -223,7 +243,7 @@
 //                     </TableCell>
 //                     <TableCell>{result.branch_name}</TableCell>
 //                     <TableCell>
-//                       <span className='font-bold text-blue-600 dark:text-blue-400'>
+//                       <span className="font-bold text-blue-600 dark:text-blue-400">
 //                         {result.final_result}
 //                       </span>
 //                     </TableCell>
@@ -232,7 +252,7 @@
 //                       <DnaStrip history={result.question_history} />
 //                     </TableCell>
 
-//                     <TableCell className='text-left text-muted-foreground tabular-nums'>
+//                     <TableCell className="text-left text-muted-foreground tabular-nums whitespace-nowrap">
 //                       {new Date(result.created_at).toLocaleString('en-GB', {
 //                         day: '2-digit',
 //                         month: 'short',
@@ -248,7 +268,7 @@
 //                 <TableRow>
 //                   <TableCell
 //                     colSpan={7}
-//                     className='h-24 text-center text-muted-foreground'
+//                     className="h-24 text-center text-muted-foreground"
 //                   >
 //                     No results found.
 //                   </TableCell>
@@ -258,9 +278,9 @@
 //           </Table>
 //         </div>
 
-//         <div className='flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-1'>
-//           <div className='flex items-center gap-2'>
-//             <span className='text-sm text-muted-foreground whitespace-nowrap'>
+//         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-1">
+//           <div className="flex items-center gap-2">
+//             <span className="text-sm text-muted-foreground whitespace-nowrap">
 //               Rows per page
 //             </span>
 //             <Select
@@ -270,7 +290,7 @@
 //                 setCurrentPage(1)
 //               }}
 //             >
-//               <SelectTrigger className='h-8 w-[70px]'>
+//               <SelectTrigger className="h-8 w-[70px]">
 //                 <SelectValue placeholder={itemsPerPage} />
 //               </SelectTrigger>
 //               <SelectContent>
@@ -283,22 +303,22 @@
 //             </Select>
 //           </div>
 
-//           <div className='flex items-center gap-2'>
+//           <div className="flex items-center gap-2">
 //             <Button
-//               variant='outline'
-//               size='sm'
-//               onClick={() => setCurrentPage((p) => p - 1)}
+//               variant="outline"
+//               size="sm"
+//               onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
 //               disabled={currentPage === 1}
 //             >
 //               <ChevronLeft size={16} />
 //             </Button>
-//             <div className='text-sm font-medium mx-2'>
+//             <div className="text-sm font-medium mx-2">
 //               Page {currentPage} of {totalPages || 1}
 //             </div>
 //             <Button
-//               variant='outline'
-//               size='sm'
-//               onClick={() => setCurrentPage((p) => p + 1)}
+//               variant="outline"
+//               size="sm"
+//               onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
 //               disabled={currentPage === totalPages || totalPages === 0}
 //             >
 //               <ChevronRight size={16} />
@@ -312,21 +332,21 @@
 
 // function DnaStrip({ history }: { history: QuestionHistoryItem[] | null }) {
 //   if (!history || history.length === 0) {
-//     return <span className='text-xs text-muted-foreground'>—</span>
+//     return <span className="text-xs text-muted-foreground">—</span>
 //   }
 
 //   return (
-//     <div className='flex items-center gap-1.5'>
+//     <div className="flex items-center gap-1.5 overflow-x-auto max-w-[200px] py-1 scrollbar-none">
 //       {history.map((q, i) => (
 //         <Tooltip key={i}>
 //           <TooltipTrigger asChild>
 //             <span
-//               className={`w-3 h-3 rounded-full transition-transform hover:scale-125 inline-block cursor-help ${
+//               className={`w-3 h-3 rounded-full transition-transform hover:scale-125 shrink-0 inline-block cursor-help ${
 //                 q.correct ? 'bg-emerald-500' : 'bg-rose-500'
 //               }`}
 //             />
 //           </TooltipTrigger>
-//           <TooltipContent side='top' className='text-xs font-semibold'>
+//           <TooltipContent side="top" className="text-xs font-semibold">
 //             Q{i + 1}: Level {q.level} ({q.correct ? 'Correct' : 'Incorrect'})
 //           </TooltipContent>
 //         </Tooltip>
@@ -334,11 +354,6 @@
 //     </div>
 //   )
 // }
-
-
-
-
-// src\components\admin\ResultsTable.tsx
 
 'use client'
 
@@ -375,8 +390,10 @@ import {
   ArrowUp,
   ArrowDown,
   Loader2,
+  Trash2,
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
+import { deleteTestResult } from '@/app/actions'
 
 interface QuestionHistoryItem {
   level: string
@@ -414,6 +431,7 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
   const supabase = useMemo(() => createClient(), [])
   const [data, setData] = useState<TestResult[]>([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -438,6 +456,23 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
     fetchResults()
   }, [branchFilter, supabase])
 
+  const handleDelete = async (id: string) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this test result? This action cannot be undone.'
+    )
+    if (!confirmed) return
+
+    try {
+      setDeletingId(id)
+      await deleteTestResult(id)
+      setData((prev) => prev.filter((item) => item.id !== id))
+    } catch {
+      alert('Failed to delete the result. Please try again.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -445,11 +480,11 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
       setSortField(field)
       setSortOrder('asc')
     }
-  };
+  }
 
   const processedData = useMemo(() => {
     const s = searchTerm.trim().toLowerCase()
-    
+
     const filtered = data.filter((item) => {
       if (!s) return true
       return (
@@ -561,6 +596,9 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                     {renderSortIndicator('created_at')}
                   </div>
                 </TableHead>
+
+                {/* Actions Column */}
+                <TableHead className="w-[60px] text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -602,12 +640,29 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                         hour12: false,
                       })}
                     </TableCell>
+
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(result.id)}
+                        disabled={deletingId === result.id}
+                        className="h-8 w-8 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 dark:hover:text-red-400 transition-colors"
+                        title="Delete Result"
+                      >
+                        {deletingId === result.id ? (
+                          <Loader2 size={16} className="animate-spin text-red-600" />
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No results found.
