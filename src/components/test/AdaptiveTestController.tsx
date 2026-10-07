@@ -333,12 +333,12 @@ export default function AdaptiveTestController({
       <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
         <h2 className='text-3xl font-bold'>Test Complete!</h2>
 
-        <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
+        {/* <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
           <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
             DEV MODE: Estimated Level
           </p>
           <span className='text-6xl font-black'>{stats.currentLevel}</span>
-        </div>
+        </div> */}
 
         {/* Dynamic Database Books Section */}
         {recommendedBooks.length > 0 && (
@@ -356,11 +356,11 @@ export default function AdaptiveTestController({
                     <span className='text-amber-500'>📖</span>
                     <span>{book.name}</span>
                   </div>
-                  {book.inlingua_level !== null && (
+                  {/* {book.inlingua_level !== null && (
                     <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
                       Level {book.inlingua_level}
                     </span>
-                  )}
+                  )} */}
                 </li>
               ))}
             </ul>
