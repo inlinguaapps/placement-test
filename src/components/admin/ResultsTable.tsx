@@ -717,13 +717,16 @@ export function ResultsTable({ branchFilter }: ResultsTableProps) {
                       {result.age ? `${result.age} yrs` : '—'}
                     </TableCell>
                     <TableCell>{result.branch_name}</TableCell>
+                    
+                    {/* Neutral styling for Level */}
                     <TableCell>
-                      <span className="font-bold text-blue-600 dark:text-blue-400">
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
                         {result.final_result}
                       </span>
                     </TableCell>
 
-                    <TableCell className="font-medium text-zinc-800 dark:text-zinc-200">
+                    {/* Blue styling for Recommended Book */}
+                    <TableCell className="font-bold text-blue-600 dark:text-blue-400">
                       {formatRecommendedBooks(result.recommended_books)}
                     </TableCell>
 
