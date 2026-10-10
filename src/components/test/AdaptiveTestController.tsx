@@ -626,16 +626,15 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
-import {
-  STRATEGIES as TEST_STRATEGIES,
-  calculateNextLevel
-} from '@/logic/adaptive/strategies'
+import { 
+  processAdaptiveAnswer, 
+  STRATEGIES as TEST_STRATEGIES 
+} from '@/logic/adaptive/adaptiveEngine'
 import { StrategyName } from '@/types/test'
-import {
-  CEFR_LEVELS,
-  getLevelsForCategory as getLevelsForTestType
+import { 
+  CEFR_LEVELS, 
+  getLevelsForCategory as getLevelsForTestType 
 } from '@/types/level-config'
-import { AudioPlayerCard, VideoPlayerCard } from './MediaPlayers'
 import { TestCompletionView } from './TestCompletionView'
 import { QuestionRenderer } from './QuestionRenderer'
 
@@ -685,7 +684,7 @@ export default function AdaptiveTestController({
   const supabase = useMemo(() => createClient(), [])
   const hasInitialized = useRef(false)
 
-  // Retrieve category-specific level ladder (e.g. ['Pre-A1', 'A1', 'A1+'] for Prathom)
+  // Retrieve category-specific level ladder
   const categoryLevels = useMemo(
     () => getLevelsForTestType(initialSession.testType),
     [initialSession.testType],
@@ -736,7 +735,6 @@ export default function AdaptiveTestController({
       stopAllMedia()
       setIsSaving(true)
 
-      // Fetch matching books for the achieved CEFR level and test stream
       const { data: booksData } = await supabase
         .from('books')
         .select('id, name, inlingua_level')
@@ -850,93 +848,39 @@ export default function AdaptiveTestController({
 
     const total = stats.totalAnswered + 1
 
-    // A. MAX QUESTIONS LIMIT REACHED
-    if (total >= strategy.maxQuestions) {
-      console.log(`[AdaptiveEngine] Max questions (${strategy.maxQuestions}) reached. Finalizing at ${stats.currentLevel}.`)
-      await finalizeTest(stats.currentLevel, total, updatedFullHistory)
+    // Delegate step progression entirely to our unified engine
+    const engineResult = processAdaptiveAnswer({
+      strategyName,
+      isCorrect,
+      categoryLevels,
+      state: {
+        currentLevel: stats.currentLevel,
+        totalAnswered: stats.totalAnswered,
+        highestPassedLevel,
+        isLevelEstablished,
+        currentLevelHistory,
+      },
+    })
+
+    setCurrentLevelHistory(engineResult.newLevelHistory)
+    setHighestPassedLevel(engineResult.updatedFloor)
+    setIsLevelEstablished(engineResult.isLevelEstablished)
+
+    if (engineResult.isFinished) {
+      await finalizeTest(engineResult.nextLevel, total, updatedFullHistory)
       return
-    }
-
-    const newLevelHistory = [...currentLevelHistory, isCorrect]
-    let nextLevel = stats.currentLevel
-    let updatedFloor = highestPassedLevel
-
-    // B. IF LEVEL IS ALREADY ESTABLISHED / LOCKED
-    if (isLevelEstablished) {
-      if (total >= strategy.minQuestions) {
-        console.log(`[AdaptiveEngine] Min questions (${strategy.minQuestions}) met while level locked. Finalizing test.`)
-        await finalizeTest(stats.currentLevel, total, updatedFullHistory)
-        return
-      }
-
-      // Lock level fixed at current level until minQuestions is met
-      nextLevel = stats.currentLevel
-      setCurrentLevelHistory(newLevelHistory)
-
-    // C. NORMAL ADAPTIVE MOVEMENT (LEVEL NOT YET LOCKED)
-    } else if (strategy.shouldMoveUp(newLevelHistory)) {
-      const currentIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
-      )
-      const prevFloorIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
-      )
-
-      if (currentIdx > prevFloorIdx) {
-        updatedFloor = stats.currentLevel
-        setHighestPassedLevel(updatedFloor)
-      }
-
-      nextLevel = calculateNextLevel(stats.currentLevel, 'up', categoryLevels)
-      setCurrentLevelHistory([])
-
-    } else if (strategy.shouldMoveDown(newLevelHistory)) {
-      const calculatedNext = calculateNextLevel(stats.currentLevel, 'down', categoryLevels)
-
-      const floorIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === (highestPassedLevel || '').toLowerCase(),
-      )
-      const nextIdx = categoryLevels.findIndex(
-        (l) => l.toLowerCase() === calculatedNext.toLowerCase(),
-      )
-
-      // CEILING EXIT CONDITION MET
-      if (highestPassedLevel && nextIdx <= floorIdx) {
-        const targetLevel = stats.currentLevel // e.g., B1 if they passed A2 and failed B1
-
-        // 1. Min questions met -> Finalize immediately
-        if (total >= strategy.minQuestions) {
-          console.log(`[AdaptiveEngine] Ceiling reached & minQuestions (${strategy.minQuestions}) met. Finalizing at ${targetLevel}.`)
-          await finalizeTest(targetLevel, total, updatedFullHistory)
-          return
-        }
-
-        // 2. Under min questions -> Lock level at targetLevel until minQuestions
-        console.log(`[AdaptiveEngine] Ceiling reached at ${stats.currentLevel}, but total (${total}) < minQuestions (${strategy.minQuestions}). Locking level at ${targetLevel}.`)
-        setIsLevelEstablished(true)
-        nextLevel = targetLevel
-        setCurrentLevelHistory([])
-
-      } else {
-        // Normal step down
-        nextLevel = calculatedNext
-        setCurrentLevelHistory([])
-      }
-    } else {
-      // Accumulate history at current level
-      setCurrentLevelHistory(newLevelHistory)
     }
 
     setStats((prev) => ({
       ...prev,
-      currentLevel: nextLevel,
+      currentLevel: engineResult.nextLevel,
       totalAnswered: total,
     }))
 
     if (total % 5 === 0) {
       updateTestResult(
         initialSession.sessionId,
-        nextLevel,
+        engineResult.nextLevel,
         false,
         updatedFullHistory,
       )
@@ -944,7 +888,7 @@ export default function AdaptiveTestController({
 
     fetchQuestion(
       initialSession.testType,
-      nextLevel,
+      engineResult.nextLevel,
       updatedUsedIds,
       total,
       updatedFullHistory,
@@ -1013,4 +957,3 @@ export default function AdaptiveTestController({
     </div>
   )
 }
-
