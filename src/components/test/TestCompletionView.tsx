@@ -20,11 +20,11 @@ export function TestCompletionView({
   onFinish,
 }: TestCompletionViewProps) {
   return (
-    <div className="text-center space-y-6 py-10 max-w-md mx-auto">
+    <div className="flex flex-col items-center justify-center min-h-[500px] text-center space-y-6 max-w-md mx-auto px-4">
       <h2 className="text-3xl font-bold">Test Complete!</h2>
 
       {recommendedBooks.length > 0 && (
-        <div className="p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm">
+        <div className="w-full p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm">
           <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
             Recommended Coursebooks ({testType})
           </h3>
