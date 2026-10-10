@@ -6,16 +6,17 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { updateTestResult } from '@/app/actions'
-import { 
+import {
   STRATEGIES as TEST_STRATEGIES,
   calculateNextLevel
 } from '@/logic/adaptive/strategies'
 import { StrategyName } from '@/types/test'
-import { 
-  CEFR_LEVELS, 
-  getLevelsForCategory as getLevelsForTestType 
+import {
+  CEFR_LEVELS,
+  getLevelsForCategory as getLevelsForTestType
 } from '@/types/level-config'
 import { AudioPlayerCard, VideoPlayerCard } from './MediaPlayers'
+import { TestCompletionView } from './TestCompletionView'
 
 interface Question {
   id: string
@@ -25,14 +26,14 @@ interface Question {
   options: Record<string, string>
   correct_answer: string
   q_type:
-    | 'text_only'
-    | 'image_context'
-    | 'image_listen_choose'
-    | 'listen_choose'
-    | 'dialogue'
-    | 'audio'
-    | 'video'
-    | 'reading'
+  | 'text_only'
+  | 'image_context'
+  | 'image_listen_choose'
+  | 'listen_choose'
+  | 'dialogue'
+  | 'audio'
+  | 'video'
+  | 'reading'
   sort_order: number
   image_url?: string
   audio_url?: string
@@ -251,7 +252,7 @@ export default function AdaptiveTestController({
       nextLevel = stats.currentLevel
       setCurrentLevelHistory(newLevelHistory)
 
-    // C. NORMAL ADAPTIVE MOVEMENT (LEVEL NOT YET LOCKED)
+      // C. NORMAL ADAPTIVE MOVEMENT (LEVEL NOT YET LOCKED)
     } else if (strategy.shouldMoveUp(newLevelHistory)) {
       const currentIdx = categoryLevels.findIndex(
         (l) => l.toLowerCase() === stats.currentLevel.toLowerCase(),
@@ -329,57 +330,67 @@ export default function AdaptiveTestController({
     )
   }
 
+  // if (stats.isFinished) {
+  //   return (
+  //     <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
+  //       <h2 className='text-3xl font-bold'>Test Complete!</h2>
+
+  //       {/* <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
+  //         <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
+  //           DEV MODE: Estimated Level
+  //         </p>
+  //         <span className='text-6xl font-black'>{stats.currentLevel}</span>
+  //       </div> */}
+
+  //       {/* Dynamic Database Books Section */}
+  //       {recommendedBooks.length > 0 && (
+  //         <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
+  //           <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
+  //             Recommended Coursebooks ({initialSession.testType})
+  //           </h3>
+  //           <ul className='space-y-2.5'>
+  //             {recommendedBooks.map((book) => (
+  //               <li
+  //                 key={book.id}
+  //                 className='flex items-center justify-between text-zinc-800 font-medium text-sm'
+  //               >
+  //                 <div className='flex items-center gap-2'>
+  //                   <span className='text-amber-500'>📖</span>
+  //                   <span>{book.name}</span>
+  //                 </div>
+  //                 {/* {book.inlingua_level !== null && (
+  //                   <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
+  //                     Level {book.inlingua_level}
+  //                   </span>
+  //                 )} */}
+  //               </li>
+  //             ))}
+  //           </ul>
+  //         </div>
+  //       )}
+
+  //       <p className='text-zinc-500 text-sm text-balance'>
+  //         Your results have been recorded. Our team will review your score shortly.
+  //       </p>
+
+  //       <Button
+  //         size='lg'
+  //         className='w-full'
+  //         onClick={() => (window.location.href = '/')}
+  //       >
+  //         Finish
+  //       </Button>
+  //     </div>
+  //   )
+  // }
+
   if (stats.isFinished) {
     return (
-      <div className='text-center space-y-6 py-10 max-w-md mx-auto'>
-        <h2 className='text-3xl font-bold'>Test Complete!</h2>
-
-        {/* <div className='p-8 bg-amber-100 text-amber-800 rounded-2xl w-full shadow-sm'>
-          <p className='text-xs uppercase tracking-widest font-bold text-amber-600 mb-1'>
-            DEV MODE: Estimated Level
-          </p>
-          <span className='text-6xl font-black'>{stats.currentLevel}</span>
-        </div> */}
-
-        {/* Dynamic Database Books Section */}
-        {recommendedBooks.length > 0 && (
-          <div className='p-6 bg-zinc-50 border border-zinc-200 rounded-2xl text-left space-y-3 shadow-sm'>
-            <h3 className='text-xs font-bold uppercase tracking-wider text-zinc-500'>
-              Recommended Coursebooks ({initialSession.testType})
-            </h3>
-            <ul className='space-y-2.5'>
-              {recommendedBooks.map((book) => (
-                <li
-                  key={book.id}
-                  className='flex items-center justify-between text-zinc-800 font-medium text-sm'
-                >
-                  <div className='flex items-center gap-2'>
-                    <span className='text-amber-500'>📖</span>
-                    <span>{book.name}</span>
-                  </div>
-                  {/* {book.inlingua_level !== null && (
-                    <span className='text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono'>
-                      Level {book.inlingua_level}
-                    </span>
-                  )} */}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <p className='text-zinc-500 text-sm text-balance'>
-          Your results have been recorded. Our team will review your score shortly.
-        </p>
-
-        <Button
-          size='lg'
-          className='w-full'
-          onClick={() => (window.location.href = '/')}
-        >
-          Finish
-        </Button>
-      </div>
+      <TestCompletionView
+        testType={initialSession.testType}
+        recommendedBooks={recommendedBooks}
+        onFinish={() => (window.location.href = '/')}
+      />
     )
   }
 
