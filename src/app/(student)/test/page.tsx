@@ -94,8 +94,8 @@ export default async function TestPage({
   }
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 pt-20 md:pt-24 bg-zinc-50 dark:bg-black">
-      <div className="w-full max-w-2xl">
+    <div className="flex flex-col items-center justify-start min-h-screen p-4 md:p-8 pt-20 md:pt-24 bg-zinc-50 dark:bg-black">
+      <div className="w-full max-w-4xl">
         <AdaptiveTestController initialSession={session} />
       </div>
     </div>
