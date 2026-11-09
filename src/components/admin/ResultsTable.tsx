@@ -554,50 +554,6 @@ export function ResultsTable({ branchFilter, isAdmin }: ResultsTableProps) {
     }
   }
 
-  const handleExportCSV = () => {
-    const exportData = processedData.filter((item) => {
-      const itemDate = item.created_at.split('T')[0]
-      if (startDate && itemDate < startDate) return false
-      if (endDate && itemDate > endDate) return false
-      return true
-    })
-
-    if (exportData.length === 0) {
-      alert('No records found for the selected date range.')
-      return
-    }
-
-    const headers = ['Student Name', 'Test Type', 'Age', 'Branch', 'Level to Study', 'Recommended Book', 'Date']
-    const rows = exportData.map((item) => [
-      `"${(item.student_name || '').replace(/"/g, '""')}"`,
-      `"${item.test_type}"`,
-      item.age ?? '',
-      `"${(item.branch_name || '').replace(/"/g, '""')}"`,
-      `"${(item.final_result || '').replace(/"/g, '""')}"`,
-      `"${formatRecommendedBooks(item.recommended_books).replace(/"/g, '""')}"`,
-      `"${new Date(item.created_at).toISOString()}"`
-    ])
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.setAttribute('href', url)
-    link.setAttribute('download', `placement_test_results_${startDate || 'all'}_to_${endDate || 'all'}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortOrder('asc')
-    }
-  }
-
   const processedData = useMemo(() => {
     const s = searchTerm.trim().toLowerCase()
 
@@ -637,6 +593,50 @@ export function ResultsTable({ branchFilter, isAdmin }: ResultsTableProps) {
       return 0
     })
   }, [data, searchTerm, sortField, sortOrder])
+
+  const handleExportCSV = () => {
+    const exportData = processedData.filter((item) => {
+      const itemDate = item.created_at.split('T')[0]
+      if (startDate && itemDate < startDate) return false
+      if (endDate && itemDate > endDate) return false
+      return true
+    })
+
+    if (exportData.length === 0) {
+      alert('No records found for the current view and selected date range.')
+      return
+    }
+
+    const headers = ['Student Name', 'Test Type', 'Age', 'Branch', 'Level to Study', 'Recommended Book', 'Date']
+    const rows = exportData.map((item) => [
+      `"${(item.student_name || '').replace(/"/g, '""')}"`,
+      `"${item.test_type}"`,
+      item.age ?? '',
+      `"${(item.branch_name || '').replace(/"/g, '""')}"`,
+      `"${(item.final_result || '').replace(/"/g, '""')}"`,
+      `"${formatRecommendedBooks(item.recommended_books).replace(/"/g, '""')}"`,
+      `"${new Date(item.created_at).toISOString()}"`
+    ])
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `placement_test_results_filtered.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+  }
 
   const totalPages = Math.ceil(processedData.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -762,7 +762,6 @@ export function ResultsTable({ branchFilter, isAdmin }: ResultsTableProps) {
                       {result.student_name}
                     </TableCell>
                     
-                    {/* Regular text for Type */}
                     <TableCell>
                       {result.test_type}
                     </TableCell>
@@ -772,14 +771,12 @@ export function ResultsTable({ branchFilter, isAdmin }: ResultsTableProps) {
                     </TableCell>
                     <TableCell>{result.branch_name}</TableCell>
                     
-                    {/* Neutral text for Level */}
                     <TableCell>
                       <span className="font-medium text-zinc-900 dark:text-zinc-100">
                         {result.final_result}
                       </span>
                     </TableCell>
 
-                    {/* Bold blue text for Recommended Book */}
                     <TableCell className="font-bold text-blue-600 dark:text-blue-400">
                       {formatRecommendedBooks(result.recommended_books)}
                     </TableCell>
