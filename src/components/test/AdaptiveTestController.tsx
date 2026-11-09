@@ -1,3 +1,4 @@
+
 // // src/components/test/AdaptiveTestController.tsx
 
 // 'use client'
@@ -12,7 +13,6 @@
 // } from '@/logic/adaptive/adaptiveEngine'
 // import { StrategyName } from '@/types/test'
 // import { 
-//   CEFR_LEVELS, 
 //   getLevelsForCategory as getLevelsForTestType 
 // } from '@/types/level-config'
 // import { TestCompletionView } from './TestCompletionView'
@@ -57,6 +57,16 @@
 //   strategyName?: StrategyName
 // }
 
+// // Mathayom levels that a bridged Prathom student can step into (skipping Mathayom A1+)
+// const MATHAYOM_BRIDGED_LEVELS = new Set(['A2', 'A2+', 'B1', 'B1+', 'B2', 'C1', 'C2'])
+
+// function resolveQueryTestType(initialTestType: string, level: string): string {
+//   if (initialTestType === 'Prathom' && MATHAYOM_BRIDGED_LEVELS.has(level)) {
+//     return 'Mathayom'
+//   }
+//   return initialTestType
+// }
+
 // export default function AdaptiveTestController({
 //   initialSession,
 //   strategyName = 'SIX_QUESTION_DYNAMIC',
@@ -64,11 +74,15 @@
 //   const supabase = useMemo(() => createClient(), [])
 //   const hasInitialized = useRef(false)
 
-//   // Retrieve category-specific level ladder
-//   const categoryLevels = useMemo(
-//     () => getLevelsForTestType(initialSession.testType),
-//     [initialSession.testType],
-//   )
+//   // Retrieve category-specific level ladder; extend Prathom dynamically to allow bridging past A1+
+//   const categoryLevels = useMemo(() => {
+//     if (initialSession.testType === 'Prathom') {
+//       return ['Pre-A1', 'A1', 'A1+', 'A2', 'A2+', 'B1', 'B1+', 'B2']
+//     }
+//     return getLevelsForTestType(initialSession.testType)
+//   }, [initialSession.testType])
+
+//   const isPrathomTrack = initialSession.testType === 'Prathom'
 
 //   const strategy = useMemo(
 //     () =>
@@ -115,11 +129,16 @@
 //       stopAllMedia()
 //       setIsSaving(true)
 
+//       const bookTestIdentity = resolveQueryTestType(
+//         initialSession.testType,
+//         finalLevel,
+//       )
+
 //       const { data: booksData } = await supabase
 //         .from('books')
 //         .select('id, name, inlingua_level')
 //         .eq('cefr_level', finalLevel)
-//         .eq('test_identity', initialSession.testType)
+//         .eq('test_identity', bookTestIdentity)
 //         .order('inlingua_level', { ascending: true })
 
 //       if (booksData) {
@@ -155,10 +174,12 @@
 //       setLoading(true)
 //       setError(null)
 
+//       const queryTestType = resolveQueryTestType(testType, level)
+
 //       let query = supabase
 //         .from('test_questions')
 //         .select('*')
-//         .eq('test_type', testType)
+//         .eq('test_type', queryTestType)
 //         .eq('level', level)
 
 //       if (excludeIds.length > 0) {
@@ -189,10 +210,15 @@
 //     hasInitialized.current = true
 
 //     async function loadInitialQuestion() {
+//       const queryTestType = resolveQueryTestType(
+//         initialSession.testType,
+//         initialSession.startingLevel,
+//       )
+
 //       const { data, error: fetchError } = await supabase
 //         .from('test_questions')
 //         .select('*')
-//         .eq('test_type', initialSession.testType)
+//         .eq('test_type', queryTestType)
 //         .eq('level', initialSession.startingLevel)
 //         .order('sort_order', { ascending: true })
 //         .limit(1)
@@ -229,7 +255,7 @@
 //     const total = stats.totalAnswered + 1
 
 //     // Delegate step progression entirely to our unified engine
-//     const engineResult = processAdaptiveAnswer({
+//     let engineResult = processAdaptiveAnswer({
 //       strategyName,
 //       isCorrect,
 //       categoryLevels,
@@ -241,6 +267,13 @@
 //         currentLevelHistory,
 //       },
 //     })
+
+//     // BRIDGE ADJUSTMENT: If a Prathom student passes A1+, skip Mathayom A1+ and jump straight to A2.
+//     // Also establish 'A1+' as their passed floor so the engine correctly recognizes A2 as secured ground.
+//     if (isPrathomTrack && stats.currentLevel === 'A1+' && isCorrect) {
+//       engineResult.nextLevel = 'A2'
+//       engineResult.updatedFloor = 'A1+'
+//     }
 
 //     setCurrentLevelHistory(engineResult.newLevelHistory)
 //     setHighestPassedLevel(engineResult.updatedFloor)
@@ -307,11 +340,11 @@
 //             </div>
 //           </div>
 
-//           {/* {currentQuestion && !loading && (
+//           {currentQuestion && !loading && (
 //             <div className="px-2 py-1 bg-amber-100 text-amber-700 text-[12px] font-bold rounded border border-amber-200 uppercase tracking-tighter mb-1">
 //               Dev Mode: Level {currentQuestion.level}
 //             </div>
-//           )} */}
+//           )} 
 //         </div>
 //       </div>
 
@@ -337,7 +370,6 @@
 //     </div>
 //   )
 // }
-
 
 
 // src/components/test/AdaptiveTestController.tsx
@@ -470,16 +502,16 @@ export default function AdaptiveTestController({
       stopAllMedia()
       setIsSaving(true)
 
-      const bookTestIdentity = resolveQueryTestType(
-        initialSession.testType,
-        finalLevel,
-      )
+      // Only for Prathom A1+, fetch both Prathom and Mathayom book identities to include Project Explore Upgrade 1
+      const targetTestIdentities = (initialSession.testType === 'Prathom' && finalLevel === 'A1+')
+        ? ['Prathom', 'Mathayom']
+        : [resolveQueryTestType(initialSession.testType, finalLevel)]
 
       const { data: booksData } = await supabase
         .from('books')
         .select('id, name, inlingua_level')
         .eq('cefr_level', finalLevel)
-        .eq('test_identity', bookTestIdentity)
+        .in('test_identity', targetTestIdentities)
         .order('inlingua_level', { ascending: true })
 
       if (booksData) {
