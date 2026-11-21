@@ -209,7 +209,7 @@ export default function AdultListeningTestController({
 
         <div className="space-y-1 text-sm sm:text-base text-foreground">
           <p>
-            Listen to the audio. Look at the example on the screen. You will hear the example{' '}
+            Listen to the audio. Look at the example below. You will hear the example{' '}
             <em className="italic">once</em> only.
           </p>
           <p>Decide which word you hear, &quot;soap&quot; or &quot;soup&quot;</p>
@@ -225,7 +225,7 @@ export default function AdultListeningTestController({
         </div>
 
         <p className="text-sm sm:text-base font-medium text-foreground">
-          The correct answer was &apos;soup&apos;, so &apos;soup&apos; should be selected.
+          The correct answer was &apos;soup&apos;, so &apos;soup&apos; is selected.
         </p>
 
         <div className="pt-2 flex justify-center">
