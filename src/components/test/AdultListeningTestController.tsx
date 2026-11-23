@@ -568,10 +568,10 @@ export default function AdultListeningTestController({
 
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-foreground">
-            Adult with Listening — Results
+            Test completed
           </h1>
           <p className="text-base text-muted-foreground">
-            Test completed
+            Results
           </p>
         </div>
 
@@ -584,7 +584,7 @@ export default function AdultListeningTestController({
               {listeningScore}{' '}
               <span className="text-base font-normal text-muted-foreground">/ 100</span>
             </p>
-            <p className="text-xs text-muted-foreground mt-1">1 pt per question</p>
+            <p className="text-xs text-muted-foreground mt-1">1 point per question</p>
           </div>
 
           <div className="p-5 rounded-xl border border-blue-200 bg-sky-100/75 dark:bg-zinc-950">
@@ -595,7 +595,7 @@ export default function AdultListeningTestController({
               {grammarScore}{' '}
               <span className="text-base font-normal text-muted-foreground">/ 100</span>
             </p>
-            <p className="text-xs text-muted-foreground mt-1">2 pts per question</p>
+            <p className="text-xs text-muted-foreground mt-1">2 points per question</p>
           </div>
         </div>
 
