@@ -477,11 +477,9 @@ export default function AdultListeningTestController({
           The correct answer was &apos;soup&apos;, so &apos;soup&apos; is selected.
         </p>
 
-        <div className="hidden md:block max-w-lg mx-auto pt-1 space-y-1.5">
-          <p className="text-sm font-medium text-slate-700 dark:text-foreground">
-            Answer down the left column first (1–5), then down the right column (6–10).
-          </p>
-          <img
+        <div className="hidden md:block max-w-xs mx-auto pt-1 space-y-1.5">
+        
+                  <img
             src="/images/column-order-guide.png"
             alt="Questions go down the left column then down the right column"
             className="w-full rounded-xl border border-blue-200 dark:border-zinc-700 shadow-2xs"
