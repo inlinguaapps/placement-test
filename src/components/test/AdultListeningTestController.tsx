@@ -215,6 +215,10 @@ export default function AdultListeningTestController({
     [activeList, startIdx, questionsPerPage]
   )
 
+  const halfCount = Math.ceil(pageQuestions.length / 2)
+  const leftColumnQuestions = pageQuestions.slice(0, halfCount)
+  const rightColumnQuestions = pageQuestions.slice(halfCount)
+
   const listeningCompletedCount = useMemo(
     () => cappedListening.filter((q) => Boolean(selections[q.id])).length,
     [cappedListening, selections]
@@ -366,6 +370,82 @@ export default function AdultListeningTestController({
     })
   }
 
+  const renderQuestionCard = (q: ListeningTestQuestion) => {
+    const options = normalizeOptions(q.options)
+    const selectedOptId = selections[q.id]
+    const isUnanswered = !selectedOptId
+    const highlightMissing = showUnansweredHighlight && isUnanswered
+    const displayNum = q.sort_order ?? activeList.indexOf(q) + 1
+    const isSideBySidePair = isListeningSection && options.length === 2
+
+    return (
+      <div
+        key={q.id}
+        className={`rounded-xl border p-2.5 md:p-4 lg:px-3 lg:py-2 md:min-h-[6.75rem] lg:min-h-0 flex flex-col justify-between lg:justify-center gap-1.5 md:gap-3 lg:gap-1.5 transition-colors ${
+          highlightMissing
+            ? 'border-amber-500 bg-amber-50/90 dark:bg-amber-950/30 ring-2 ring-amber-300/70'
+            : 'border-blue-300 dark:border-blue-800 bg-sky-100/80 dark:bg-sky-950/35'
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex h-6.5 md:h-7.5 lg:h-6.5 min-w-6.5 md:min-w-7.5 lg:min-w-6.5 px-1.5 items-center justify-center rounded-md text-xs sm:text-sm md:text-base lg:text-sm font-bold shrink-0 ${
+              highlightMissing
+                ? 'bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100'
+                : 'bg-blue-200/80 dark:bg-zinc-800 text-slate-900 dark:text-foreground'
+            }`}
+          >
+            {displayNum}
+          </span>
+
+          {q.image_url && (
+            <img
+              src={q.image_url}
+              alt={`Question ${displayNum}`}
+              className="max-h-20 rounded object-contain"
+            />
+          )}
+          {q.question_text && (
+            <p className="text-sm sm:text-base md:text-lg lg:text-base font-medium text-slate-900 dark:text-foreground leading-snug">
+              {q.question_text}
+            </p>
+          )}
+        </div>
+
+        <div
+          className={
+            isSideBySidePair
+              ? 'grid grid-cols-2 gap-2 md:gap-3 lg:gap-2'
+              : 'space-y-1.5'
+          }
+        >
+          {options.map((opt) => {
+            const active = selectedOptId === opt.id
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleSelectOption(q.id, opt.id)}
+                className={`min-h-10.5 md:h-12 lg:h-10 px-3 py-1.5 rounded-lg border text-sm sm:text-base md:text-lg lg:text-base text-center transition-colors disabled:opacity-70 ${
+                  isSideBySidePair ? '' : 'w-full text-left'
+                } ${
+                  active
+                    ? 'border-blue-600 bg-blue-500 text-white font-semibold shadow-2xs'
+                    : highlightMissing
+                      ? 'border-amber-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-800 dark:text-foreground hover:border-amber-500 hover:bg-amber-100/50'
+                      : 'border-blue-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-800 dark:text-foreground hover:border-blue-400 hover:bg-blue-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   // 1. Listening Test Instruction Screen
   if (stage === 'listening_intro') {
     return (
@@ -396,6 +476,17 @@ export default function AdultListeningTestController({
         <p className="text-base sm:text-lg font-medium text-slate-800 dark:text-foreground">
           The correct answer was &apos;soup&apos;, so &apos;soup&apos; is selected.
         </p>
+
+        <div className="hidden md:block max-w-lg mx-auto pt-1 space-y-1.5">
+          <p className="text-sm font-medium text-slate-700 dark:text-foreground">
+            Answer down the left column first (1–5), then down the right column (6–10).
+          </p>
+          <img
+            src="/images/column-order-guide.png"
+            alt="Questions go down the left column then down the right column"
+            className="w-full rounded-xl border border-blue-200 dark:border-zinc-700 shadow-2xs"
+          />
+        </div>
 
         <div className="pt-2 flex justify-center">
           <Button
@@ -590,18 +681,12 @@ export default function AdultListeningTestController({
           </span>
 
           {isListeningSection ? (
-            <div className="flex flex-wrap items-center gap-3 text-slate-700 dark:text-muted-foreground">
-              <span className="font-semibold text-slate-900 dark:text-foreground">
-                {listeningCompletedCount} / {cappedListening.length} questions completed
-              </span>
-              <span className="rounded-full bg-sky-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs sm:text-sm md:text-base lg:text-sm font-medium text-sky-950 dark:text-foreground">
-                Page {pageIndex + 1} of {totalPages} ({startIdx + 1}–{endIdx})
-              </span>
-            </div>
+            <span className="font-semibold text-slate-700 dark:text-muted-foreground">
+              {listeningCompletedCount} / {cappedListening.length} questions completed
+            </span>
           ) : (
             <span className="text-slate-700 dark:text-muted-foreground">
-              Questions {startIdx + 1}–{endIdx} of {activeList.length} (Page {pageIndex + 1} of{' '}
-              {totalPages})
+              Questions {startIdx + 1}–{endIdx} of {activeList.length}
             </span>
           )}
         </div>
@@ -614,83 +699,18 @@ export default function AdultListeningTestController({
         </div>
       </div>
 
-      {/* 2 columns on tablet/PC; 1 column on mobile */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-4 lg:gap-2.5">
-        {pageQuestions.map((q) => {
-          const options = normalizeOptions(q.options)
-          const selectedOptId = selections[q.id]
-          const isUnanswered = !selectedOptId
-          const highlightMissing = showUnansweredHighlight && isUnanswered
-          const displayNum = q.sort_order ?? activeList.indexOf(q) + 1
-          const isSideBySidePair = isListeningSection && options.length === 2
+      {/* Mobile: 1–N in order; Tablet/PC (md+): down Col 1, then down Col 2 */}
+      <div className="md:hidden space-y-2.5">
+        {pageQuestions.map((q) => renderQuestionCard(q))}
+      </div>
 
-          return (
-            <div
-              key={q.id}
-              className={`rounded-xl border p-2.5 md:p-4 lg:px-3 lg:py-2 md:min-h-[6.75rem] lg:min-h-0 flex flex-col justify-between lg:justify-center gap-1.5 md:gap-3 lg:gap-1.5 transition-colors ${
-                highlightMissing
-                  ? 'border-amber-500 bg-amber-50/90 dark:bg-amber-950/30 ring-2 ring-amber-300/70'
-                  : 'border-blue-300 dark:border-blue-800 bg-sky-100/80 dark:bg-sky-950/35'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-6.5 md:h-7.5 lg:h-6.5 min-w-6.5 md:min-w-7.5 lg:min-w-6.5 px-1.5 items-center justify-center rounded-md text-xs sm:text-sm md:text-base lg:text-sm font-bold shrink-0 ${
-                    highlightMissing
-                      ? 'bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100'
-                      : 'bg-blue-200/80 dark:bg-zinc-800 text-slate-900 dark:text-foreground'
-                  }`}
-                >
-                  {displayNum}
-                </span>
-
-                {q.image_url && (
-                  <img
-                    src={q.image_url}
-                    alt={`Question ${displayNum}`}
-                    className="max-h-20 rounded object-contain"
-                  />
-                )}
-                {q.question_text && (
-                  <p className="text-sm sm:text-base md:text-lg lg:text-base font-medium text-slate-900 dark:text-foreground leading-snug">
-                    {q.question_text}
-                  </p>
-                )}
-              </div>
-
-              <div
-                className={
-                  isSideBySidePair
-                    ? 'grid grid-cols-2 gap-2 md:gap-3 lg:gap-2'
-                    : 'space-y-1.5'
-                }
-              >
-                {options.map((opt) => {
-                  const active = selectedOptId === opt.id
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => handleSelectOption(q.id, opt.id)}
-                      className={`min-h-10.5 md:h-12 lg:h-10 px-3 py-1.5 rounded-lg border text-sm sm:text-base md:text-lg lg:text-base text-center transition-colors disabled:opacity-70 ${
-                        isSideBySidePair ? '' : 'w-full text-left'
-                      } ${
-                        active
-                          ? 'border-blue-600 bg-blue-500 text-white font-semibold shadow-2xs'
-                          : highlightMissing
-                            ? 'border-amber-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-800 dark:text-foreground hover:border-amber-500 hover:bg-amber-100/50'
-                            : 'border-blue-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-800 dark:text-foreground hover:border-blue-400 hover:bg-blue-50'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
+      <div className="hidden md:grid md:grid-cols-2 md:gap-4 lg:gap-2.5 md:items-start">
+        <div className="space-y-4 lg:space-y-2.5">
+          {leftColumnQuestions.map((q) => renderQuestionCard(q))}
+        </div>
+        <div className="space-y-4 lg:space-y-2.5">
+          {rightColumnQuestions.map((q) => renderQuestionCard(q))}
+        </div>
       </div>
 
       {/* Footer Bar: warning sits beside Next button without shifting questions */}
@@ -709,7 +729,7 @@ export default function AdultListeningTestController({
         >
           {nextButtonLabel}
         </Button>
-         </div>
+      </div>
     </div>
   )
 }
