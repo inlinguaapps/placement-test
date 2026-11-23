@@ -35,7 +35,7 @@ export default async function AdultListeningPage({
   const { listening, reading } = await getAdultListeningQuestions()
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 md:p-8 pt-20 md:pt-24 bg-zinc-50 dark:bg-black">
+    <div className="flex flex-col items-center justify-start lg:justify-center min-h-screen px-3 sm:px-4 md:px-6 pt-6 sm:pt-8 md:pt-16 pb-6 lg:py-4 bg-zinc-50 dark:bg-black">
       <div className="w-full max-w-4xl">
         <AdultListeningTestController
           sessionId={session.sessionId}
