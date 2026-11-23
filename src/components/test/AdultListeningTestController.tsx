@@ -12,11 +12,12 @@ const LISTENING_INTRO_AUDIO_SRC =
 const LISTENING_AUDIO_BASE_URL =
   'https://brjzaznqgpmbuubrshlj.supabase.co/storage/v1/object/public/test_media/audio/adult'
 
-const QUESTIONS_PER_PAGE = 10
+const LISTENING_QUESTIONS_PER_PAGE = 10
+const GRAMMAR_QUESTIONS_PER_PAGE = 4
 
 function getListeningPageAudioSrc(pageIndex: number): string {
-  const start = pageIndex * QUESTIONS_PER_PAGE + 1
-  const end = start + QUESTIONS_PER_PAGE - 1
+  const start = pageIndex * LISTENING_QUESTIONS_PER_PAGE + 1
+  const end = start + LISTENING_QUESTIONS_PER_PAGE - 1
   return `${LISTENING_AUDIO_BASE_URL}/${start}-${end}.mp3`
 }
 
@@ -195,6 +196,7 @@ export default function AdultListeningTestController({
     }
   }, [stopAllListeningAudio])
 
+  const isListeningSection = stage === 'listening'
   const activeList =
     stage === 'listening'
       ? cappedListening
@@ -202,11 +204,15 @@ export default function AdultListeningTestController({
         ? cappedGrammar
         : []
 
-  const totalPages = Math.max(1, Math.ceil(activeList.length / QUESTIONS_PER_PAGE))
-  const startIdx = pageIndex * QUESTIONS_PER_PAGE
+  const questionsPerPage = isListeningSection
+    ? LISTENING_QUESTIONS_PER_PAGE
+    : GRAMMAR_QUESTIONS_PER_PAGE
+
+  const totalPages = Math.max(1, Math.ceil(activeList.length / questionsPerPage))
+  const startIdx = pageIndex * questionsPerPage
   const pageQuestions = useMemo(
-    () => activeList.slice(startIdx, startIdx + QUESTIONS_PER_PAGE),
-    [activeList, startIdx]
+    () => activeList.slice(startIdx, startIdx + questionsPerPage),
+    [activeList, startIdx, questionsPerPage]
   )
 
   const listeningCompletedCount = useMemo(
@@ -220,7 +226,6 @@ export default function AdultListeningTestController({
     pageQuestions.length > 0 && answeredOnPageCount === pageQuestions.length
   const isLastPageInSection = pageIndex + 1 >= totalPages
 
-  const isListeningSection = stage === 'listening'
   const isFinalTestSubmission =
     (!isListeningSection && isLastPageInSection) ||
     (isListeningSection && isLastPageInSection && cappedGrammar.length === 0)
@@ -559,8 +564,8 @@ export default function AdultListeningTestController({
     )
   }
 
-  // 5. 10-Question Page View: bumped typography, balanced max-w-4xl on PC, instant page turns
-  const endIdx = Math.min(startIdx + QUESTIONS_PER_PAGE, activeList.length)
+  // 5. Paged Question View (10/page for Listening, 4/page for Grammar)
+  const endIdx = Math.min(startIdx + questionsPerPage, activeList.length)
   const overallProgressPercent = isListeningSection
     ? Math.round((listeningCompletedCount / Math.max(1, cappedListening.length)) * 100)
     : Math.round(((pageIndex + 1) / totalPages) * 100)
@@ -689,28 +694,22 @@ export default function AdultListeningTestController({
       </div>
 
       {/* Footer Bar: warning sits beside Next button without shifting questions */}
-      <div className="flex items-center justify-between gap-3 pt-2 md:pt-4 lg:pt-2.5 border-t border-blue-200 dark:border-zinc-800">
-        <span className="text-sm sm:text-base md:text-lg lg:text-base text-slate-600 dark:text-muted-foreground font-medium">
-          {answeredOnPageCount} of {pageQuestions.length} answered on this page
-        </span>
+      <div className="flex items-center justify-end gap-3 pt-2 md:pt-4 lg:pt-2.5 border-t border-blue-200 dark:border-zinc-800">
+        {(pageWarning || saveError) && (
+          <span className="text-sm sm:text-base font-medium text-amber-700 dark:text-amber-400">
+            {saveError ?? pageWarning}
+          </span>
+        )}
 
-        <div className="flex items-center gap-2.5">
-          {(pageWarning || saveError) && (
-            <span className="text-sm sm:text-base font-medium text-amber-700 dark:text-amber-400">
-              {saveError ?? pageWarning}
-            </span>
-          )}
-
-          <Button
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleAdvancePage}
-            className="min-w-32 h-10 sm:h-11 md:h-12 lg:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm sm:text-base font-semibold shadow-xs shrink-0"
-          >
-            {nextButtonLabel}
-          </Button>
-        </div>
-      </div>
+        <Button
+          type="button"
+          disabled={isSubmitting}
+          onClick={handleAdvancePage}
+          className="min-w-32 h-10 sm:h-11 md:h-12 lg:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm sm:text-base font-semibold shadow-xs shrink-0"
+        >
+          {nextButtonLabel}
+        </Button>
+         </div>
     </div>
   )
 }
