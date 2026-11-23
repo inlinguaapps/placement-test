@@ -276,7 +276,6 @@ export default function AdultListeningTestController({
     setShowUnansweredHighlight(false)
     setPageWarning(null)
     stopAudio(pageAudioRef.current)
-    setIsSubmitting(true)
     setSaveError(null)
 
     let pageCorrectCount = 0
@@ -306,48 +305,60 @@ export default function AdultListeningTestController({
     const finalGrammarScore = Math.min(100, nextGrammarCorrect * 2)
     const summaryResult = `Listening: ${finalListeningScore}/100 | Grammar: ${finalGrammarScore}/100`
 
-    try {
-      const res = await updateTestResult(
-        sessionId,
-        summaryResult,
-        isFinalTestSubmission,
-        nextHistory,
-        []
-      )
+    // Final submission: await save so results are guaranteed persisted before completion screen
+    if (isFinalTestSubmission) {
+      setIsSubmitting(true)
+      try {
+        const res = await updateTestResult(
+          sessionId,
+          summaryResult,
+          true,
+          nextHistory,
+          []
+        )
 
-      if (!res?.success) {
-        setSaveError('Could not save your answers. Please try again.')
+        if (!res?.success) {
+          setSaveError('Could not save your final answers. Please try again.')
+          setIsSubmitting(false)
+          return
+        }
+      } catch {
+        setSaveError('Network error while saving answers. Please try again.')
         setIsSubmitting(false)
         return
       }
-    } catch {
-      setSaveError('Network error while saving answers. Please try again.')
+
+      setListeningCorrect(nextListeningCorrect)
+      setGrammarCorrect(nextGrammarCorrect)
+      setHistory(nextHistory)
       setIsSubmitting(false)
+      stopAllListeningAudio()
+      setStage('completed')
       return
     }
 
+    // Intermediate pages: advance immediately and persist progress in background
     setListeningCorrect(nextListeningCorrect)
     setGrammarCorrect(nextGrammarCorrect)
     setHistory(nextHistory)
-    setIsSubmitting(false)
 
     if (isListeningSection) {
       if (isLastPageInSection) {
         stopAllListeningAudio()
         setPageIndex(0)
-        setStage(cappedGrammar.length > 0 ? 'grammar_intro' : 'completed')
+        setStage('grammar_intro')
       } else {
         setPageIndex((prev) => prev + 1)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } else {
-      if (isLastPageInSection) {
-        setStage('completed')
-      } else {
-        setPageIndex((prev) => prev + 1)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      }
+      setPageIndex((prev) => prev + 1)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
+
+    updateTestResult(sessionId, summaryResult, false, nextHistory, []).catch(() => {
+      // Background checkpoint failed; final submission sends full cumulative nextHistory
+    })
   }
 
   // 1. Listening Test Instruction Screen
@@ -360,7 +371,7 @@ export default function AdultListeningTestController({
           Listening Test
         </h1>
 
-        <div className="space-y-1 text-sm sm:text-base text-slate-700 dark:text-foreground">
+        <div className="space-y-1 text-base sm:text-lg text-slate-700 dark:text-foreground">
           <p>
             Listen to the audio. Look at the example below. You will hear the example{' '}
             <em className="italic">once</em> only.
@@ -369,15 +380,15 @@ export default function AdultListeningTestController({
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-4 pt-1">
-          <div className="min-w-36 px-6 py-3 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
+          <div className="min-w-36 px-6 py-3 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground text-base sm:text-lg font-medium">
             soap
           </div>
-          <div className="min-w-36 px-6 py-3 rounded-xl border-2 border-blue-600 bg-blue-500 text-white font-semibold shadow-xs">
+          <div className="min-w-36 px-6 py-3 rounded-xl border-2 border-blue-600 bg-blue-500 text-white text-base sm:text-lg font-semibold shadow-xs">
             soup
           </div>
         </div>
 
-        <p className="text-sm sm:text-base font-medium text-slate-800 dark:text-foreground">
+        <p className="text-base sm:text-lg font-medium text-slate-800 dark:text-foreground">
           The correct answer was &apos;soup&apos;, so &apos;soup&apos; is selected.
         </p>
 
@@ -394,7 +405,7 @@ export default function AdultListeningTestController({
               setStage('listening')
               playAudioFromStart(pageAudioRef.current, getListeningPageAudioSrc(0))
             }}
-            className="min-w-52 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+            className="min-w-52 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold shadow-xs"
           >
             Start Test
           </Button>
@@ -413,7 +424,7 @@ export default function AdultListeningTestController({
           Grammar Test
         </h1>
 
-        <p className="text-sm sm:text-base font-medium text-slate-700 dark:text-foreground">
+        <p className="text-base sm:text-lg font-medium text-slate-700 dark:text-foreground">
           Look at the example below. The correct answer is selected.
         </p>
 
@@ -423,7 +434,7 @@ export default function AdultListeningTestController({
           sitting outside in the sun.
         </p>
 
-        <div className="flex flex-col items-center gap-3 max-w-xs mx-auto w-full">
+        <div className="flex flex-col items-center gap-3 max-w-xs mx-auto w-full text-base sm:text-lg">
           <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
             likes
           </div>
@@ -446,7 +457,7 @@ export default function AdultListeningTestController({
               setShowUnansweredHighlight(false)
               setStage('grammar')
             }}
-            className="min-w-52 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+            className="min-w-52 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold shadow-xs"
           >
             Start Grammar Test
           </Button>
@@ -462,10 +473,10 @@ export default function AdultListeningTestController({
         {audioPlayers}
 
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-foreground">
             Adult with Listening — Results
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Test completed
           </p>
         </div>
@@ -496,7 +507,7 @@ export default function AdultListeningTestController({
 
         <Button
           asChild
-          className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+          className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold shadow-xs"
         >
           <Link href="/" onClick={stopAllListeningAudio}>
             Finish &amp; Return Home
@@ -512,17 +523,17 @@ export default function AdultListeningTestController({
       <div className="bg-white dark:bg-zinc-900 border border-blue-200 dark:border-zinc-800 rounded-2xl p-6 text-center space-y-4 shadow-sm">
         {audioPlayers}
 
-        <h2 className="text-lg font-bold">
+        <h2 className="text-xl font-bold">
           No {isListeningSection ? 'Listening' : 'Grammar'} Questions Found
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           No {isListeningSection ? 'listening' : 'grammar'} questions are available for adult_listening.
         </p>
         <div className="flex justify-center gap-3">
           {isListeningSection && cappedGrammar.length > 0 ? (
             <Button
               type="button"
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold"
               onClick={() => {
                 stopAllListeningAudio()
                 setPageIndex(0)
@@ -534,7 +545,7 @@ export default function AdultListeningTestController({
           ) : (
             <Button
               type="button"
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold"
               onClick={() => {
                 stopAllListeningAudio()
                 setStage('completed')
@@ -548,7 +559,7 @@ export default function AdultListeningTestController({
     )
   }
 
-  // 5. 10-Question Page View: stretches on portrait tablet (md), balanced max-w-4xl on PC (lg), scrollable on mobile
+  // 5. 10-Question Page View: bumped typography, balanced max-w-4xl on PC, instant page turns
   const endIdx = Math.min(startIdx + QUESTIONS_PER_PAGE, activeList.length)
   const overallProgressPercent = isListeningSection
     ? Math.round((listeningCompletedCount / Math.max(1, cappedListening.length)) * 100)
@@ -568,7 +579,7 @@ export default function AdultListeningTestController({
 
       {/* Header + Progress Strip */}
       <div className="space-y-2 md:space-y-2.5 lg:space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm md:text-base lg:text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base md:text-lg lg:text-base">
           <span className="font-bold text-slate-900 dark:text-foreground">
             {isListeningSection ? 'Listening Section' : 'Grammar Section'}
           </span>
@@ -578,7 +589,7 @@ export default function AdultListeningTestController({
               <span className="font-semibold text-slate-900 dark:text-foreground">
                 {listeningCompletedCount} / {cappedListening.length} questions completed
               </span>
-              <span className="rounded-full bg-sky-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs md:text-sm lg:text-xs font-medium text-sky-950 dark:text-foreground">
+              <span className="rounded-full bg-sky-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs sm:text-sm md:text-base lg:text-sm font-medium text-sky-950 dark:text-foreground">
                 Page {pageIndex + 1} of {totalPages} ({startIdx + 1}–{endIdx})
               </span>
             </div>
@@ -619,7 +630,7 @@ export default function AdultListeningTestController({
             >
               <div className="flex items-center gap-2">
                 <span
-                  className={`inline-flex h-6 md:h-7 lg:h-6 min-w-6 md:min-w-7 lg:min-w-6 px-1.5 items-center justify-center rounded-md text-xs md:text-sm lg:text-xs font-bold shrink-0 ${
+                  className={`inline-flex h-6.5 md:h-7.5 lg:h-6.5 min-w-6.5 md:min-w-7.5 lg:min-w-6.5 px-1.5 items-center justify-center rounded-md text-xs sm:text-sm md:text-base lg:text-sm font-bold shrink-0 ${
                     highlightMissing
                       ? 'bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100'
                       : 'bg-blue-200/80 dark:bg-zinc-800 text-slate-900 dark:text-foreground'
@@ -636,7 +647,7 @@ export default function AdultListeningTestController({
                   />
                 )}
                 {q.question_text && (
-                  <p className="text-xs sm:text-sm md:text-base lg:text-sm font-medium text-slate-900 dark:text-foreground leading-snug">
+                  <p className="text-sm sm:text-base md:text-lg lg:text-base font-medium text-slate-900 dark:text-foreground leading-snug">
                     {q.question_text}
                   </p>
                 )}
@@ -657,7 +668,7 @@ export default function AdultListeningTestController({
                       type="button"
                       disabled={isSubmitting}
                       onClick={() => handleSelectOption(q.id, opt.id)}
-                      className={`min-h-10 md:h-11 lg:h-9 px-3 py-1.5 rounded-lg border text-xs sm:text-sm md:text-base lg:text-sm text-center transition-colors disabled:opacity-70 ${
+                      className={`min-h-10.5 md:h-12 lg:h-10 px-3 py-1.5 rounded-lg border text-sm sm:text-base md:text-lg lg:text-base text-center transition-colors disabled:opacity-70 ${
                         isSideBySidePair ? '' : 'w-full text-left'
                       } ${
                         active
@@ -679,13 +690,13 @@ export default function AdultListeningTestController({
 
       {/* Footer Bar: warning sits beside Next button without shifting questions */}
       <div className="flex items-center justify-between gap-3 pt-2 md:pt-4 lg:pt-2.5 border-t border-blue-200 dark:border-zinc-800">
-        <span className="text-xs sm:text-sm md:text-base lg:text-sm text-slate-600 dark:text-muted-foreground font-medium">
+        <span className="text-sm sm:text-base md:text-lg lg:text-base text-slate-600 dark:text-muted-foreground font-medium">
           {answeredOnPageCount} of {pageQuestions.length} answered on this page
         </span>
 
         <div className="flex items-center gap-2.5">
           {(pageWarning || saveError) && (
-            <span className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-400">
+            <span className="text-sm sm:text-base font-medium text-amber-700 dark:text-amber-400">
               {saveError ?? pageWarning}
             </span>
           )}
@@ -694,7 +705,7 @@ export default function AdultListeningTestController({
             type="button"
             disabled={isSubmitting}
             onClick={handleAdvancePage}
-            className="min-w-32 h-9 sm:h-10 md:h-11 lg:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs shrink-0"
+            className="min-w-32 h-10 sm:h-11 md:h-12 lg:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm sm:text-base font-semibold shadow-xs shrink-0"
           >
             {nextButtonLabel}
           </Button>
