@@ -1,4 +1,5 @@
-// // src\app\(student)\adult\AdultFormClient.tsx
+
+// // // src\app\(student)\adult\AdultFormClient.tsx
 
 // 'use client'
 
@@ -42,12 +43,14 @@
 //   const isFormInvalid = !name.trim() || !branch || isSubmitting
 
 //   return (
-//     <div className="flex flex-1 flex-col items-center justify-center min-h-screen p-6 bg-zinc-50 dark:bg-black">
-//       <form onSubmit={handleStart} className="w-full max-w-xs space-y-6">
+//     <div className="flex flex-col flex-1 items-center justify-center min-h-dvh p-4 sm:p-6 bg-zinc-50 dark:bg-black">
+//       <form onSubmit={handleStart} className="w-full max-w-sm sm:max-w-md space-y-6 bg-white dark:bg-zinc-900 p-6 sm:p-8 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
 //         <div className="space-y-2 text-center">
-//           <h1 className="text-2xl font-bold">Adult Placement Test</h1>
-//           <p className="text-sm text-muted-foreground">
-//             Please enter your name and select your branch.
+//           <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+//             Adult Placement Test
+//           </h1>
+//           <p className="text-xs sm:text-sm text-muted-foreground">
+//             Please enter your details to begin.
 //           </p>
 //         </div>
 
@@ -56,29 +59,29 @@
 //         )}
 
 //         <div className="space-y-2">
-//           <Label htmlFor="name">Full Name</Label>
+//           <Label htmlFor="name" className="text-sm font-medium">Full Name</Label>
 //           <Input
 //             id="name"
 //             placeholder="e.g. Somchai Dee"
 //             value={name}
 //             onChange={(e) => setName(e.target.value)}
 //             disabled={isSubmitting}
-//             className="h-11"
+//             className="h-12 text-base sm:text-sm"
 //           />
 //         </div>
 
 //         <div className="space-y-2">
-//           <Label htmlFor="branch">Study Location</Label>
+//           <Label htmlFor="branch" className="text-sm font-medium">Study Location</Label>
 //           <select
 //             id="branch"
 //             value={branch}
 //             onChange={(e) => setBranch(e.target.value)}
 //             disabled={isSubmitting}
-//             className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+//             className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
 //           >
-//             <option value="">Select a branch...</option>
+//             <option value="" disabled>Select a branch...</option>
 //             {branches.map((b) => (
-//               <option key={b} value={b}>
+//               <option key={b} value={b} className="bg-background text-foreground">
 //                 {b}
 //               </option>
 //             ))}
@@ -87,7 +90,7 @@
 
 //         <Button
 //           type="submit"
-//           className="w-full h-11"
+//           className="w-full h-12 text-base sm:text-sm font-semibold"
 //           disabled={isFormInvalid}
 //         >
 //           {isSubmitting ? 'Starting...' : 'Start Test'}
@@ -97,12 +100,12 @@
 //   )
 // }
 
-// // src\app\(student)\adult\AdultFormClient.tsx
+// src/app/(student)/adult/AdultFormClient.tsx
 
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -110,6 +113,9 @@ import { initializeTestSession } from '@/app/actions'
 
 export default function AdultFormClient({ branches }: { branches: string[] }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isListeningMode = searchParams.get('mode') === 'listening'
+
   const [name, setName] = useState('')
   const [branch, setBranch] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -126,11 +132,15 @@ export default function AdultFormClient({ branches }: { branches: string[] }) {
       const session = await initializeTestSession({
         name: name.trim(),
         age: 0,
-        category: 'Adult',
+        category: isListeningMode ? 'Adult_Listening' : 'Adult',
         branch,
       })
 
-      router.push(`/test?sessionId=${session.sessionId}`)
+      if (isListeningMode) {
+        router.push(`/adult_listening?sessionId=${session.sessionId}`)
+      } else {
+        router.push(`/test?sessionId=${session.sessionId}`)
+      }
     } catch (err) {
       console.error('Failed to start session:', err)
       setError('Failed to initialize test session. Please try again.')
@@ -142,10 +152,15 @@ export default function AdultFormClient({ branches }: { branches: string[] }) {
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center min-h-dvh p-4 sm:p-6 bg-zinc-50 dark:bg-black">
-      <form onSubmit={handleStart} className="w-full max-w-sm sm:max-w-md space-y-6 bg-white dark:bg-zinc-900 p-6 sm:p-8 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+      <form
+        onSubmit={handleStart}
+        className="w-full max-w-sm sm:max-w-md space-y-6 bg-white dark:bg-zinc-900 p-6 sm:p-8 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
+      >
         <div className="space-y-2 text-center">
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-            Adult Placement Test
+            {isListeningMode
+              ? 'Adult Placement Test (with Listening)'
+              : 'Adult Placement Test'}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Please enter your details to begin.
@@ -157,7 +172,9 @@ export default function AdultFormClient({ branches }: { branches: string[] }) {
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="name" className="text-sm font-medium">Full Name</Label>
+          <Label htmlFor="name" className="text-sm font-medium">
+            Full Name
+          </Label>
           <Input
             id="name"
             placeholder="e.g. Somchai Dee"
@@ -169,7 +186,9 @@ export default function AdultFormClient({ branches }: { branches: string[] }) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="branch" className="text-sm font-medium">Study Location</Label>
+          <Label htmlFor="branch" className="text-sm font-medium">
+            Study Location
+          </Label>
           <select
             id="branch"
             value={branch}
@@ -177,7 +196,9 @@ export default function AdultFormClient({ branches }: { branches: string[] }) {
             disabled={isSubmitting}
             className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
-            <option value="" disabled>Select a branch...</option>
+            <option value="" disabled>
+              Select a branch...
+            </option>
             {branches.map((b) => (
               <option key={b} value={b} className="bg-background text-foreground">
                 {b}
