@@ -21,10 +21,10 @@ export default function SelectionPage() {
           />
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-center text-slate-800">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-center text-slate-700">
           Placement Test
         </h1>
-        <p className="text-sm sm:text-base text-slate-800 mb-8 text-center font-medium">
+        <p className="text-sm sm:text-base text-slate-700 mb-8 text-center font-medium">
           Please select your test track
         </p>
 
