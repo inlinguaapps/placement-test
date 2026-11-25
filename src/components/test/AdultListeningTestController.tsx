@@ -171,7 +171,6 @@ function buildPassageSentenceGroups(questions: ListeningTestQuestion[]): Grammar
       if (/[.!?]$/.test(piece.trim()) && currentQuestions.length > 0) {
         flushGroup()
       } else if (idx < pieces.length - 1 && /[.!?]$/.test(piece.trim())) {
-        // Sentence ended before any gap was attached (rare); start clean for next sentence
         currentSegments = []
       }
     })
@@ -659,24 +658,22 @@ export default function AdultListeningTestController({
             Start Test
           </Button>
 
-          {process.env.NODE_ENV === 'development' && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                stopAllListeningAudio()
-                setPageIndex(0)
-                setSelections({})
-                setSaveError(null)
-                setPageWarning(null)
-                setShowUnansweredHighlight(false)
-                setStage('grammar')
-              }}
-              className="h-11 rounded-xl border-amber-400 text-amber-800 hover:bg-amber-50 dark:text-amber-300"
-            >
-              [Dev] Skip to Grammar
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              stopAllListeningAudio()
+              setPageIndex(0)
+              setSelections({})
+              setSaveError(null)
+              setPageWarning(null)
+              setShowUnansweredHighlight(false)
+              setStage('grammar_intro')
+            }}
+            className="h-11 rounded-xl border-amber-400 text-amber-800 hover:bg-amber-50 dark:text-amber-300"
+          >
+            [Dev] Skip to Grammar
+          </Button>
         </div>
       </div>
     )
@@ -692,17 +689,38 @@ export default function AdultListeningTestController({
           Grammar Test
         </h1>
 
-        <p className="text-base sm:text-lg font-medium text-slate-700 dark:text-foreground">
-          Choose the correct word or phrase from each dropdown in the sentence.
-        </p>
+        <div className="max-w-xl mx-auto space-y-2 text-base sm:text-lg font-medium text-slate-700 dark:text-foreground">
+          <p>
+            <strong>Questions 1–25:</strong> Complete each sentence by selecting the best option for the gap.
+          </p>
+          <p>
+            <strong>Questions 26–50:</strong> Read one sentence at a time and select each answer from the dropdown in the sentence.
+          </p>
+        </div>
 
-        <p className="text-lg sm:text-xl text-slate-900 dark:text-foreground">
-          In warm climates people{' '}
-          <span className="inline-flex items-center rounded-lg border-2 border-blue-600 bg-blue-500 px-3 py-0.5 text-base sm:text-lg font-semibold text-white">
-            like ▾
-          </span>{' '}
-          sitting outside in the sun.
-        </p>
+        <div className="space-y-3 pt-1">
+          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-muted-foreground">
+            Example (Questions 1–25)
+          </p>
+
+          <p className="text-lg sm:text-xl text-slate-900 dark:text-foreground">
+            In warm climates people{' '}
+            <span className="inline-block min-w-20 border-b-2 border-slate-900 dark:border-foreground align-baseline" />{' '}
+            sitting outside in the sun.
+          </p>
+
+          <div className="flex flex-col items-center gap-3 max-w-xs mx-auto w-full text-base sm:text-lg">
+            <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
+              likes
+            </div>
+            <div className="w-full py-2.5 px-4 rounded-xl border-2 border-blue-600 bg-blue-500 text-white font-semibold shadow-xs">
+              like
+            </div>
+            <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
+              are liking
+            </div>
+          </div>
+        </div>
 
         <div className="pt-2 flex justify-center">
           <Button
@@ -874,8 +892,8 @@ export default function AdultListeningTestController({
             Select an option from {pageQuestions.length === 1 ? 'the dropdown' : 'each dropdown'} to complete the sentence.
           </p>
 
-          <div className="rounded-xl border border-blue-300 dark:border-blue-800 bg-sky-100/80 dark:bg-sky-950/35 p-4 sm:p-6">
-            <div className="text-base sm:text-lg md:text-xl text-slate-900 dark:text-foreground leading-[2.4]">
+          <div className="rounded-xl border border-blue-300 dark:border-blue-800 bg-sky-100/80 dark:bg-sky-950/35 p-4 sm:p-5">
+            <div className="text-[15px] sm:text-base md:text-lg text-slate-900 dark:text-foreground leading-[2.35]">
               {currentGrammarStep.group.segments.map((seg, idx) => {
                 if (seg.type === 'text') {
                   const addLeadingSpace = idx > 0 && !/^[,.;:!?)]/.test(seg.value)
@@ -900,7 +918,7 @@ export default function AdultListeningTestController({
                       disabled={isSubmitting}
                       value={selectedOptId}
                       onChange={(e) => handleSelectOption(q.id, e.target.value)}
-                      className={`h-9 sm:h-10 rounded-lg border-2 px-2.5 pr-7 text-sm sm:text-base font-semibold transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-70 ${
+                      className={`h-9 rounded-lg border-2 px-2.5 pr-7 text-sm sm:text-[15px] font-semibold transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-70 ${
                         selectedOptId
                           ? 'border-blue-600 bg-blue-500 text-white shadow-2xs'
                           : highlightMissing
