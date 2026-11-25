@@ -689,36 +689,50 @@ export default function AdultListeningTestController({
           Grammar Test
         </h1>
 
-        <div className="max-w-xl mx-auto space-y-2 text-base sm:text-lg font-medium text-slate-700 dark:text-foreground">
-          <p>
-            <strong>Questions 1–25:</strong> Complete each sentence by selecting the best option for the gap.
-          </p>
-          <p>
-            <strong>Questions 26–50:</strong> Read one sentence at a time and select each answer from the dropdown in the sentence.
-          </p>
-        </div>
+        <p className="text-base sm:text-lg text-slate-700 dark:text-foreground">
+          Choose the correct answer for each gap.
+        </p>
 
-        <div className="space-y-3 pt-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-muted-foreground">
-            Example (Questions 1–25)
-          </p>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-3 max-w-2xl mx-auto pt-1">
+          <div className="rounded-xl border border-blue-200 bg-sky-50/70 dark:bg-zinc-950 p-4 space-y-3 h-full flex flex-col justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-muted-foreground">
+              Gap-fill example
+            </p>
+            <p className="text-base sm:text-lg text-slate-900 dark:text-foreground">
+              In warm climates people{' '}
+              <span className="inline-block min-w-16 border-b-2 border-slate-900 dark:border-foreground align-baseline" />{' '}
+              sitting outside.
+            </p>
+            <div className="space-y-2 max-w-48 mx-auto w-full text-sm sm:text-base">
+              <div className="py-2 px-3 rounded-lg border border-blue-300 bg-white dark:bg-zinc-900 text-slate-800 dark:text-foreground">
+                likes
+              </div>
+              <div className="py-2 px-3 rounded-lg border-2 border-blue-600 bg-blue-500 text-white font-semibold">
+                like
+              </div>
+              <div className="py-2 px-3 rounded-lg border border-blue-300 bg-white dark:bg-zinc-900 text-slate-800 dark:text-foreground">
+                are liking
+              </div>
+            </div>
+          </div>
 
-          <p className="text-lg sm:text-xl text-slate-900 dark:text-foreground">
-            In warm climates people{' '}
-            <span className="inline-block min-w-20 border-b-2 border-slate-900 dark:border-foreground align-baseline" />{' '}
-            sitting outside in the sun.
-          </p>
+          <span className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground px-1">
+            OR
+          </span>
 
-          <div className="flex flex-col items-center gap-3 max-w-xs mx-auto w-full text-base sm:text-lg">
-            <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
-              likes
+          <div className="rounded-xl border border-blue-200 bg-sky-50/70 dark:bg-zinc-950 p-4 space-y-3 h-full flex flex-col justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-muted-foreground">
+              Dropdown example
+            </p>
+            <div className="my-auto text-base sm:text-lg text-slate-900 dark:text-foreground leading-relaxed">
+              In warm climates people{' '}
+              <span className="inline-flex items-center gap-1 rounded-lg border-2 border-blue-600 bg-blue-500 px-2.5 py-0.5 text-sm sm:text-base font-semibold text-white align-baseline">
+                like
+                <span aria-hidden="true">▾</span>
+              </span>{' '}
+              sitting outside.
             </div>
-            <div className="w-full py-2.5 px-4 rounded-xl border-2 border-blue-600 bg-blue-500 text-white font-semibold shadow-xs">
-              like
-            </div>
-            <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
-              are liking
-            </div>
+            <div className="h-4" />
           </div>
         </div>
 
