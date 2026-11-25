@@ -40,6 +40,20 @@ interface OptionItem {
   label: string
 }
 
+type SentenceSegment =
+  | { type: 'text'; value: string }
+  | { type: 'gap'; question: ListeningTestQuestion; displayNum: number }
+
+interface GrammarSentenceGroup {
+  id: string
+  segments: SentenceSegment[]
+  questions: ListeningTestQuestion[]
+}
+
+type GrammarStep =
+  | { kind: 'sentence'; group: GrammarSentenceGroup }
+  | { kind: 'cards'; questions: ListeningTestQuestion[] }
+
 type Stage = 'listening_intro' | 'listening' | 'grammar_intro' | 'grammar' | 'completed'
 
 interface Props {
@@ -107,6 +121,131 @@ function isAnswerCorrect(selected: OptionItem, correctAnswer: string): boolean {
   )
 }
 
+function isPassageSentenceQuestion(q: ListeningTestQuestion): boolean {
+  return typeof q.sort_order === 'number' && q.sort_order >= 26 && q.sort_order <= 50
+}
+
+function appendTextSegment(segments: SentenceSegment[], rawText: string) {
+  const text = rawText.replace(/\s+/g, ' ')
+  if (!text.trim()) return
+
+  const cleaned = text.trim()
+  const last = segments[segments.length - 1]
+  if (last && last.type === 'text') {
+    const needsSpace = !/^[,.;:!?)]/.test(cleaned)
+    last.value = `${last.value.trimEnd()}${needsSpace ? ' ' : ''}${cleaned}`
+  } else {
+    segments.push({ type: 'text', value: cleaned })
+  }
+}
+
+function buildPassageSentenceGroups(questions: ListeningTestQuestion[]): GrammarSentenceGroup[] {
+  if (questions.length === 0) return []
+
+  const sorted = [...questions].sort(
+    (a, b) => (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
+  )
+
+  const groups: GrammarSentenceGroup[] = []
+  let currentSegments: SentenceSegment[] = []
+  let currentQuestions: ListeningTestQuestion[] = []
+
+  const flushGroup = () => {
+    if (currentQuestions.length > 0) {
+      groups.push({
+        id: `sent-${groups.length + 1}-${currentQuestions[0].id}`,
+        segments: currentSegments,
+        questions: currentQuestions,
+      })
+      currentSegments = []
+      currentQuestions = []
+    }
+  }
+
+  const pushTextWithSentenceBreaks = (textChunk: string) => {
+    // Split after terminal punctuation (. ! ?) even mid-fragment (e.g. "1930. Uruguay")
+    const pieces = textChunk.split(/(?<=[.!?])\s+/)
+    pieces.forEach((piece, idx) => {
+      if (!piece.trim()) return
+      appendTextSegment(currentSegments, piece)
+      if (/[.!?]$/.test(piece.trim()) && currentQuestions.length > 0) {
+        flushGroup()
+      } else if (idx < pieces.length - 1 && /[.!?]$/.test(piece.trim())) {
+        // Sentence ended before any gap was attached (rare); start clean for next sentence
+        currentSegments = []
+      }
+    })
+  }
+
+  sorted.forEach((q, idx) => {
+    const displayNum = q.sort_order ?? idx + 26
+    const rawText = String(q.question_text ?? '')
+    const parts = rawText.split(/(_{3,})/g)
+    let hasBlank = false
+
+    for (const part of parts) {
+      if (!part) continue
+      if (/^_{3,}$/.test(part)) {
+        hasBlank = true
+        currentSegments.push({
+          type: 'gap',
+          question: q,
+          displayNum,
+        })
+        currentQuestions.push(q)
+      } else {
+        pushTextWithSentenceBreaks(part)
+      }
+    }
+
+    if (!hasBlank) {
+      currentSegments.push({
+        type: 'gap',
+        question: q,
+        displayNum,
+      })
+      currentQuestions.push(q)
+    }
+  })
+
+  flushGroup()
+  return groups
+}
+
+function buildGrammarSteps(questions: ListeningTestQuestion[]): GrammarStep[] {
+  if (questions.length === 0) return []
+
+  const passageQs: ListeningTestQuestion[] = []
+  const otherQs: ListeningTestQuestion[] = []
+
+  for (const q of questions) {
+    if (isPassageSentenceQuestion(q)) {
+      passageQs.push(q)
+    } else {
+      otherQs.push(q)
+    }
+  }
+
+  const steps: GrammarStep[] = []
+
+  for (let i = 0; i < otherQs.length; i += GRAMMAR_QUESTIONS_PER_PAGE) {
+    steps.push({
+      kind: 'cards',
+      questions: otherQs.slice(i, i + GRAMMAR_QUESTIONS_PER_PAGE),
+    })
+  }
+
+  const sentenceGroups = buildPassageSentenceGroups(passageQs)
+  for (const group of sentenceGroups) {
+    steps.push({
+      kind: 'sentence',
+      group,
+    })
+  }
+
+  return steps
+}
+
 export default function AdultListeningTestController({
   sessionId,
   listeningQuestions,
@@ -119,6 +258,10 @@ export default function AdultListeningTestController({
   const cappedGrammar = useMemo(
     () => readingQuestions.slice(0, 50),
     [readingQuestions]
+  )
+  const grammarSteps = useMemo(
+    () => buildGrammarSteps(cappedGrammar),
+    [cappedGrammar]
   )
 
   const [stage, setStage] = useState<Stage>('listening_intro')
@@ -197,23 +340,26 @@ export default function AdultListeningTestController({
   }, [stopAllListeningAudio])
 
   const isListeningSection = stage === 'listening'
-  const activeList =
-    stage === 'listening'
-      ? cappedListening
-      : stage === 'grammar'
-        ? cappedGrammar
-        : []
+  const currentGrammarStep =
+    stage === 'grammar' ? grammarSteps[pageIndex] ?? null : null
 
-  const questionsPerPage = isListeningSection
-    ? LISTENING_QUESTIONS_PER_PAGE
-    : GRAMMAR_QUESTIONS_PER_PAGE
+  const totalPages = isListeningSection
+    ? Math.max(1, Math.ceil(cappedListening.length / LISTENING_QUESTIONS_PER_PAGE))
+    : Math.max(1, grammarSteps.length)
 
-  const totalPages = Math.max(1, Math.ceil(activeList.length / questionsPerPage))
-  const startIdx = pageIndex * questionsPerPage
-  const pageQuestions = useMemo(
-    () => activeList.slice(startIdx, startIdx + questionsPerPage),
-    [activeList, startIdx, questionsPerPage]
-  )
+  const startIdx = pageIndex * LISTENING_QUESTIONS_PER_PAGE
+
+  const pageQuestions = useMemo(() => {
+    if (stage === 'listening') {
+      return cappedListening.slice(startIdx, startIdx + LISTENING_QUESTIONS_PER_PAGE)
+    }
+    if (stage === 'grammar' && currentGrammarStep) {
+      return currentGrammarStep.kind === 'sentence'
+        ? currentGrammarStep.group.questions
+        : currentGrammarStep.questions
+    }
+    return []
+  }, [stage, cappedListening, startIdx, currentGrammarStep])
 
   const halfCount = Math.ceil(pageQuestions.length / 2)
   const leftColumnQuestions = pageQuestions.slice(0, halfCount)
@@ -222,6 +368,11 @@ export default function AdultListeningTestController({
   const listeningCompletedCount = useMemo(
     () => cappedListening.filter((q) => Boolean(selections[q.id])).length,
     [cappedListening, selections]
+  )
+
+  const grammarCompletedCount = useMemo(
+    () => cappedGrammar.filter((q) => Boolean(selections[q.id])).length,
+    [cappedGrammar, selections]
   )
 
   const answeredOnPageCount = pageQuestions.filter((q) => Boolean(selections[q.id])).length
@@ -262,10 +413,15 @@ export default function AdultListeningTestController({
 
   const handleSelectOption = (questionId: string, optionId: string) => {
     if (isSubmitting) return
-    setSelections((prev) => ({
-      ...prev,
-      [questionId]: optionId,
-    }))
+    setSelections((prev) => {
+      const next = { ...prev }
+      if (!optionId) {
+        delete next[questionId]
+      } else {
+        next[questionId] = optionId
+      }
+      return next
+    })
     if (saveError) setSaveError(null)
     if (pageWarning) setPageWarning(null)
     if (showUnansweredHighlight) setShowUnansweredHighlight(false)
@@ -370,12 +526,12 @@ export default function AdultListeningTestController({
     })
   }
 
-  const renderQuestionCard = (q: ListeningTestQuestion) => {
+  const renderQuestionCard = (q: ListeningTestQuestion, fallbackIndex: number) => {
     const options = normalizeOptions(q.options)
     const selectedOptId = selections[q.id]
     const isUnanswered = !selectedOptId
     const highlightMissing = showUnansweredHighlight && isUnanswered
-    const displayNum = q.sort_order ?? activeList.indexOf(q) + 1
+    const displayNum = q.sort_order ?? fallbackIndex + 1
     const isSideBySidePair = isListeningSection && options.length === 2
 
     return (
@@ -478,15 +634,14 @@ export default function AdultListeningTestController({
         </p>
 
         <div className="hidden md:block max-w-xs mx-auto pt-1 space-y-1.5">
-        
-                  <img
+          <img
             src="/images/column-order-guide.png"
             alt="Questions go down the left column then down the right column"
             className="w-full rounded-xl border border-blue-200 dark:border-zinc-700 shadow-2xs"
           />
         </div>
 
-        <div className="pt-2 flex justify-center">
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
           <Button
             type="button"
             onClick={() => {
@@ -503,6 +658,25 @@ export default function AdultListeningTestController({
           >
             Start Test
           </Button>
+
+          {process.env.NODE_ENV === 'development' && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                stopAllListeningAudio()
+                setPageIndex(0)
+                setSelections({})
+                setSaveError(null)
+                setPageWarning(null)
+                setShowUnansweredHighlight(false)
+                setStage('grammar')
+              }}
+              className="h-11 rounded-xl border-amber-400 text-amber-800 hover:bg-amber-50 dark:text-amber-300"
+            >
+              [Dev] Skip to Grammar
+            </Button>
+          )}
         </div>
       </div>
     )
@@ -519,26 +693,16 @@ export default function AdultListeningTestController({
         </h1>
 
         <p className="text-base sm:text-lg font-medium text-slate-700 dark:text-foreground">
-          Look at the example below. The correct answer is selected.
+          Choose the correct word or phrase from each dropdown in the sentence.
         </p>
 
         <p className="text-lg sm:text-xl text-slate-900 dark:text-foreground">
           In warm climates people{' '}
-          <span className="inline-block min-w-20 border-b-2 border-slate-900 dark:border-foreground align-baseline" />{' '}
+          <span className="inline-flex items-center rounded-lg border-2 border-blue-600 bg-blue-500 px-3 py-0.5 text-base sm:text-lg font-semibold text-white">
+            like ▾
+          </span>{' '}
           sitting outside in the sun.
         </p>
-
-        <div className="flex flex-col items-center gap-3 max-w-xs mx-auto w-full text-base sm:text-lg">
-          <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
-            likes
-          </div>
-          <div className="w-full py-2.5 px-4 rounded-xl border-2 border-blue-600 bg-blue-500 text-white font-semibold shadow-xs">
-            like
-          </div>
-          <div className="w-full py-2.5 px-4 rounded-xl border border-blue-300 bg-sky-100/80 dark:bg-zinc-900 text-slate-800 dark:text-foreground font-medium">
-            are liking
-          </div>
-        </div>
 
         <div className="pt-2 flex justify-center">
           <Button
@@ -653,11 +817,14 @@ export default function AdultListeningTestController({
     )
   }
 
-  // 5. Paged Question View (10/page for Listening, 4/page for Grammar)
-  const endIdx = Math.min(startIdx + questionsPerPage, activeList.length)
+  // 5. Question View (10/page for Listening; 1 sentence with inline dropdowns for Q26–50, 4/page cards for other Grammar items)
+  const isSentenceStep = !isListeningSection && currentGrammarStep?.kind === 'sentence'
+  const cardStartIdx = pageIndex * GRAMMAR_QUESTIONS_PER_PAGE
+  const cardEndIdx = Math.min(cardStartIdx + GRAMMAR_QUESTIONS_PER_PAGE, cappedGrammar.length)
+
   const overallProgressPercent = isListeningSection
     ? Math.round((listeningCompletedCount / Math.max(1, cappedListening.length)) * 100)
-    : Math.round(((pageIndex + 1) / totalPages) * 100)
+    : Math.round((grammarCompletedCount / Math.max(1, cappedGrammar.length)) * 100)
 
   const nextButtonLabel = isSubmitting
     ? 'Saving...'
@@ -682,9 +849,13 @@ export default function AdultListeningTestController({
             <span className="font-semibold text-slate-700 dark:text-muted-foreground">
               {listeningCompletedCount} / {cappedListening.length} questions completed
             </span>
+          ) : isSentenceStep ? (
+            <span className="text-slate-700 dark:text-muted-foreground">
+              Sentence {pageIndex + 1} of {totalPages} ({grammarCompletedCount} / {cappedGrammar.length} items)
+            </span>
           ) : (
             <span className="text-slate-700 dark:text-muted-foreground">
-              Questions {startIdx + 1}–{endIdx} of {activeList.length}
+              Questions {cardStartIdx + 1}–{cardEndIdx} of {cappedGrammar.length}
             </span>
           )}
         </div>
@@ -697,19 +868,84 @@ export default function AdultListeningTestController({
         </div>
       </div>
 
-      {/* Mobile: 1–N in order; Tablet/PC (md+): down Col 1, then down Col 2 */}
-      <div className="md:hidden space-y-2.5">
-        {pageQuestions.map((q) => renderQuestionCard(q))}
-      </div>
+      {isSentenceStep && currentGrammarStep?.kind === 'sentence' ? (
+        <div className="space-y-3">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-muted-foreground">
+            Select an option from {pageQuestions.length === 1 ? 'the dropdown' : 'each dropdown'} to complete the sentence.
+          </p>
 
-      <div className="hidden md:grid md:grid-cols-2 md:gap-4 lg:gap-2.5 md:items-start">
-        <div className="space-y-4 lg:space-y-2.5">
-          {leftColumnQuestions.map((q) => renderQuestionCard(q))}
+          <div className="rounded-xl border border-blue-300 dark:border-blue-800 bg-sky-100/80 dark:bg-sky-950/35 p-4 sm:p-6">
+            <div className="text-base sm:text-lg md:text-xl text-slate-900 dark:text-foreground leading-[2.4]">
+              {currentGrammarStep.group.segments.map((seg, idx) => {
+                if (seg.type === 'text') {
+                  const addLeadingSpace = idx > 0 && !/^[,.;:!?)]/.test(seg.value)
+                  return (
+                    <span key={`txt-${idx}`}>
+                      {addLeadingSpace ? ' ' : ''}
+                      {seg.value}
+                    </span>
+                  )
+                }
+
+                const q = seg.question
+                const opts = normalizeOptions(q.options)
+                const selectedOptId = selections[q.id] ?? ''
+                const isUnanswered = !selectedOptId
+                const highlightMissing = showUnansweredHighlight && isUnanswered
+
+                return (
+                  <span key={`gap-${q.id}-${idx}`} className="inline-block mx-1.5 align-baseline">
+                    <select
+                      aria-label={`Question ${seg.displayNum}`}
+                      disabled={isSubmitting}
+                      value={selectedOptId}
+                      onChange={(e) => handleSelectOption(q.id, e.target.value)}
+                      className={`h-9 sm:h-10 rounded-lg border-2 px-2.5 pr-7 text-sm sm:text-base font-semibold transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-70 ${
+                        selectedOptId
+                          ? 'border-blue-600 bg-blue-500 text-white shadow-2xs'
+                          : highlightMissing
+                            ? 'border-amber-500 bg-amber-100 text-amber-950 ring-2 ring-amber-300/70'
+                            : 'border-blue-400 bg-white text-slate-800 dark:bg-zinc-900 dark:text-foreground hover:border-blue-600'
+                      }`}
+                    >
+                      <option value="" className="bg-white text-slate-700">
+                        ({seg.displayNum}) Choose...
+                      </option>
+                      {opts.map((opt) => (
+                        <option
+                          key={opt.id}
+                          value={opt.id}
+                          className="bg-white text-slate-900 font-medium"
+                        >
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                )
+              })}
+            </div>
+          </div>
         </div>
-        <div className="space-y-4 lg:space-y-2.5">
-          {rightColumnQuestions.map((q) => renderQuestionCard(q))}
-        </div>
-      </div>
+      ) : (
+        <>
+          {/* Mobile: 1–N in order; Tablet/PC (md+): down Col 1, then down Col 2 */}
+          <div className="md:hidden space-y-2.5">
+            {pageQuestions.map((q, idx) => renderQuestionCard(q, idx))}
+          </div>
+
+          <div className="hidden md:grid md:grid-cols-2 md:gap-4 lg:gap-2.5 md:items-start">
+            <div className="space-y-4 lg:space-y-2.5">
+              {leftColumnQuestions.map((q, idx) => renderQuestionCard(q, idx))}
+            </div>
+            <div className="space-y-4 lg:space-y-2.5">
+              {rightColumnQuestions.map((q, idx) =>
+                renderQuestionCard(q, halfCount + idx)
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Footer Bar: warning sits beside Next button without shifting questions */}
       <div className="flex items-center justify-end gap-3 pt-2 md:pt-4 lg:pt-2.5 border-t border-blue-200 dark:border-zinc-800">
