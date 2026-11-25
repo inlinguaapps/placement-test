@@ -870,26 +870,18 @@ export default function AdultListeningTestController({
     <div className="w-full max-w-4xl mx-auto lg:my-auto bg-white dark:bg-zinc-900 border border-blue-200 dark:border-zinc-800 rounded-2xl p-3.5 sm:p-5 md:p-6 lg:px-6 lg:py-4 space-y-2.5 md:space-y-5 lg:space-y-3 shadow-sm">
       {audioPlayers}
 
-      {/* Header + Progress Strip */}
+  {/* Header + Progress Strip */}
       <div className="space-y-2 md:space-y-2.5 lg:space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base md:text-lg lg:text-base">
           <span className="font-bold text-slate-900 dark:text-foreground">
             {isListeningSection ? 'Listening Section' : 'Grammar Section'}
           </span>
 
-          {isListeningSection ? (
-            <span className="font-semibold text-slate-700 dark:text-muted-foreground">
-              {listeningCompletedCount} / {cappedListening.length} questions completed
-            </span>
-          ) : isSentenceStep ? (
-            <span className="text-slate-700 dark:text-muted-foreground">
-              Sentence {pageIndex + 1} of {totalPages} ({grammarCompletedCount} / {cappedGrammar.length} items)
-            </span>
-          ) : (
-            <span className="text-slate-700 dark:text-muted-foreground">
-              Questions {cardStartIdx + 1}–{cardEndIdx} of {cappedGrammar.length}
-            </span>
-          )}
+          <span className="font-semibold text-slate-700 dark:text-muted-foreground">
+            {isListeningSection
+              ? `${listeningCompletedCount} / ${cappedListening.length} questions completed`
+              : `${grammarCompletedCount} / ${cappedGrammar.length} questions completed`}
+          </span>
         </div>
 
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-sky-100 dark:bg-zinc-800">
