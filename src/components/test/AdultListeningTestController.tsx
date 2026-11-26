@@ -658,7 +658,7 @@ export default function AdultListeningTestController({
             Start Test
           </Button>
 
-          <Button
+          {/* <Button
             type="button"
             variant="outline"
             onClick={() => {
@@ -673,7 +673,7 @@ export default function AdultListeningTestController({
             className="h-11 rounded-xl border-amber-400 text-amber-800 hover:bg-amber-50 dark:text-amber-300"
           >
             [Dev] Skip to Grammar
-          </Button>
+          </Button> */}
         </div>
       </div>
     )
